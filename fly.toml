@@ -1,0 +1,38 @@
+# fly.toml — Fly.io configuration for My Vault
+# Replace "my-vault-app" below with the app name you choose during `fly launch`
+
+app = "my-vault-app"
+primary_region = "sin"   # Singapore — closest for India. Change to "bom" if available.
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  NODE_ENV = "production"
+
+# Persistent volumes — your database and uploaded files live here
+[mounts]
+  source = "vault_data"
+  destination = "/data"
+
+[[mounts]]
+  source = "vault_uploads"
+  destination = "/uploads"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false   # Keep app always running (no cold starts)
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -1,0 +1,2 @@
+# Minimal valid 1x1 PNG (indigo) - replace with proper icons for production
+# Run: node scripts/generate-icons.js

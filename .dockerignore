@@ -1,0 +1,14 @@
+.next
+node_modules
+data
+uploads
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.local
+.git
+.gitignore
+README.md
+AGENTS.md
+CLAUDE.md

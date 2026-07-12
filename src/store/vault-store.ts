@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import type { VaultItem, FilterTab } from "@/lib/types";
 
+// Read theme from localStorage at module load time (SSR-safe)
+function getInitialTheme(): "light" | "dark" | "system" {
+  if (typeof window === "undefined") return "dark";
+  const saved = localStorage.getItem("vault-theme");
+  if (saved === "light" || saved === "dark") return saved;
+  return "dark"; // default to dark
+}
+
 interface VaultStore {
   items: VaultItem[];
   filter: FilterTab;
@@ -30,6 +38,11 @@ interface VaultStore {
   setShowSettings: (v: boolean) => void;
   setEditingNoteId: (id: string | null) => void;
   refreshItems: () => Promise<void>;
+
+  // Optimistic updates — instant UI, sync in background
+  optimisticAdd: (item: VaultItem) => void;
+  optimisticRemove: (ids: string[]) => void;
+  optimisticUpdate: (id: string, patch: Partial<VaultItem>) => void;
 }
 
 export const useVaultStore = create<VaultStore>((set, get) => ({
@@ -39,7 +52,7 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   searchResults: [],
   isSearching: false,
   isLoading: true,
-  theme: "system",
+  theme: getInitialTheme(),
   selectedItem: null,
   showNoteEditor: false,
   showFilePreview: false,
@@ -60,6 +73,28 @@ export const useVaultStore = create<VaultStore>((set, get) => ({
   setShowActivityCenter: (showActivityCenter) => set({ showActivityCenter }),
   setShowSettings: (showSettings) => set({ showSettings }),
   setEditingNoteId: (editingNoteId) => set({ editingNoteId }),
+
+  // Add item to top of list instantly
+  optimisticAdd: (item) => {
+    const { items } = get();
+    set({ items: [item, ...items] });
+  },
+
+  // Remove items instantly by id
+  optimisticRemove: (ids) => {
+    const idSet = new Set(ids);
+    const { items, searchResults } = get();
+    set({
+      items: items.filter((i) => !idSet.has(i.id)),
+      searchResults: searchResults.filter((i) => !idSet.has(i.id)),
+    });
+  },
+
+  // Patch an item in place instantly
+  optimisticUpdate: (id, patch) => {
+    const { items } = get();
+    set({ items: items.map((i) => i.id === id ? { ...i, ...patch } : i) });
+  },
 
   refreshItems: async () => {
     const { filter, items } = get();

@@ -59,21 +59,15 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
   };
 
   const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : theme === "light" ? "system" : "dark";
+    const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    applyTheme(next);
+    const root = document.documentElement;
+    if (next === "dark") root.classList.add("dark");
+    else root.classList.remove("dark");
+    localStorage.setItem("vault-theme", next);
   };
 
-  const applyTheme = (t: string) => {
-    const root = document.documentElement;
-    if (t === "dark") root.classList.add("dark");
-    else if (t === "light") root.classList.remove("dark");
-    else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.toggle("dark", prefersDark);
-    }
-    localStorage.setItem("vault-theme", t);
-  };
+  const isDark = theme === "dark";
 
   return (
     <header className="sticky top-0 z-40 bg-[var(--header-bg)]/95 backdrop-blur-xl border-b border-[var(--border)]">
@@ -134,7 +128,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
               className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
               title="Toggle theme"
             >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
               onClick={onLock}

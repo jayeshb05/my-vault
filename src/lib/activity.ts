@@ -3,7 +3,7 @@ import { supabaseAdmin } from "./supabase";
 import { parseUserAgent } from "./utils";
 
 export type ActivityAction =
-  | "login" | "logout" | "upload" | "download" | "preview"
+  | "login" | "login_failed" | "logout" | "upload" | "download" | "preview"
   | "note_create" | "note_edit" | "note_delete" | "note_copy"
   | "note_duplicate" | "note_pin" | "file_rename" | "file_delete"
   | "file_favorite" | "search" | "filter" | "share_upload"
@@ -74,7 +74,8 @@ export async function getActivityLogs(options: {
       downloads: ["download"],
       notes: ["note_create", "note_edit", "note_delete", "note_copy", "note_duplicate", "note_pin"],
       searches: ["search"],
-      auth: ["login", "logout", "lock", "unlock", "password_change"],
+      auth: ["login", "login_failed", "logout", "lock", "unlock", "password_change"],
+      access: ["login", "login_failed"],
       deleted: ["note_delete", "file_delete"],
     };
     const actions = filterMap[filter];
@@ -91,6 +92,13 @@ export async function getActivityLogs(options: {
 
   if (error) return [];
   return data ?? [];
+}
+
+export async function clearAccessLogs() {
+  await supabaseAdmin
+    .from("activity_logs")
+    .delete()
+    .in("action", ["login", "login_failed"]);
 }
 
 export async function getSessions(limit = 50) {

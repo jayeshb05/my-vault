@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useVaultStore } from "@/store/vault-store";
 import Header from "@/components/dashboard/Header";
 import FilterTabs from "@/components/dashboard/FilterTabs";
@@ -35,9 +35,60 @@ export default function Dashboard({ onLock }: DashboardProps) {
     setShowFilePreview,
     setShowNoteEditor,
     setEditingNoteId,
+    optimisticAdd,
+    optimisticRemove,
+    optimisticUpdate,
   } = useVaultStore();
 
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+
+  // ── Auto-lock on inactivity ──────────────────────────────────────────────
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoLockMinutesRef = useRef<number>(2);
+
+  const resetLockTimer = useCallback(() => {
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    const ms = autoLockMinutesRef.current * 60 * 1000;
+    lockTimerRef.current = setTimeout(() => {
+      onLock();
+    }, ms);
+  }, [onLock]);
+
+  // Load auto-lock setting and start the timer
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.settings?.auto_lock_minutes) {
+          autoLockMinutesRef.current = data.settings.auto_lock_minutes;
+        }
+        resetLockTimer();
+      })
+      .catch(() => resetLockTimer());
+  }, [resetLockTimer]);
+
+  // Listen for setting changes from SettingsModal (instant, no need to re-fetch)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { minutes } = (e as CustomEvent).detail;
+      autoLockMinutesRef.current = minutes;
+      resetLockTimer(); // restart timer with new duration immediately
+    };
+    window.addEventListener("autolock-changed", handler);
+    return () => window.removeEventListener("autolock-changed", handler);
+  }, [resetLockTimer]);
+
+  // Reset timer on any user activity
+  useEffect(() => {
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+    const onActivity = () => resetLockTimer();
+    events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, onActivity));
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
+  }, [resetLockTimer]);
+  // ────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     refreshItems();
@@ -68,36 +119,67 @@ export default function Dashboard({ onLock }: DashboardProps) {
   }, [setSearchQuery, setIsSearching, setSearchResults]);
 
   const handleSend = async (text: string, attachments: Attachment[]): Promise<boolean> => {
-    try {
-      if (text.trim()) {
-        const res = await fetch("/api/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: text }),
-        });
-        if (!res.ok) return false;
-      }
-      for (const att of attachments) {
-        const formData = new FormData();
-        formData.append("file", att.file);
-        formData.append("source", "clipboard");
-        const res = await fetch("/api/files", { method: "POST", body: formData });
-        if (!res.ok) return false;
-      }
-      if (!text.trim() && attachments.length === 0) return false;
-      await refreshItems();
-      return true;
-    } catch {
-      return false;
+    if (!text.trim() && attachments.length === 0) return false;
+    const now = new Date().toISOString();
+
+    // Optimistically add text note instantly
+    if (text.trim()) {
+      const tempId = `temp-note-${Date.now()}`;
+      optimisticAdd({
+        id: tempId,
+        type: "note",
+        title: text.trim().slice(0, 80),
+        content: text.trim(),
+        is_pinned: false,
+        is_favorite: false,
+        created_at: now,
+        updated_at: now,
+      });
+      fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+      })
+        .then((res) => { if (res.ok) refreshItems(); })
+        .catch(() => {});
     }
+
+    // Optimistically add file attachments instantly
+    for (const att of attachments) {
+      const tempId = `temp-file-${Date.now()}-${Math.random()}`;
+      const isImage = att.file.type.startsWith("image/");
+      const isPdf = att.file.type === "application/pdf";
+      optimisticAdd({
+        id: tempId,
+        type: "file",
+        title: att.file.name,
+        category: isImage ? "image" : isPdf ? "pdf" : "other",
+        mime_type: att.file.type,
+        file_size: att.file.size,
+        is_pinned: false,
+        is_favorite: false,
+        created_at: now,
+        updated_at: now,
+      });
+      const formData = new FormData();
+      formData.append("file", att.file);
+      formData.append("source", "clipboard");
+      fetch("/api/files", { method: "POST", body: formData })
+        .then((res) => { if (res.ok) refreshItems(); })
+        .catch(() => {});
+    }
+
+    return true;
   };
 
-  const doDelete = async (toDelete: VaultItem[]) => {
+  const doDelete = (toDelete: VaultItem[]) => {
+    // Remove from UI instantly
+    optimisticRemove(toDelete.map((i) => i.id));
+    // Fire deletes in background
     for (const item of toDelete) {
       const endpoint = item.type === "note" ? `/api/notes?id=${item.id}` : `/api/files?id=${item.id}`;
-      await fetch(endpoint, { method: "DELETE" });
+      fetch(endpoint, { method: "DELETE" }).catch(() => {});
     }
-    await refreshItems();
   };
 
   const handleDelete = (item: VaultItem) => {
@@ -114,30 +196,39 @@ export default function Dashboard({ onLock }: DashboardProps) {
     });
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!pendingDelete) return;
+    const toDelete = pendingDelete.items;
     setPendingDelete(null);
-    await doDelete(pendingDelete.items);
+    doDelete(toDelete);
   };
 
   const handleFavorite = async (item: VaultItem) => {
+    // Optimistic update instantly
+    optimisticUpdate(item.id, { is_favorite: !item.is_favorite });
     const endpoint = item.type === "note" ? "/api/notes" : "/api/files";
-    await fetch(endpoint, {
+    fetch(endpoint, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: item.id, action: "favorite" }),
+    }).catch(() => {
+      // Revert on failure
+      optimisticUpdate(item.id, { is_favorite: item.is_favorite });
     });
-    await refreshItems();
   };
 
   const handlePin = async (item: VaultItem) => {
     if (item.type !== "note") return;
-    await fetch("/api/notes", {
+    // Optimistic update instantly
+    optimisticUpdate(item.id, { is_pinned: !item.is_pinned });
+    fetch("/api/notes", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: item.id, action: "pin" }),
+    }).catch(() => {
+      // Revert on failure
+      optimisticUpdate(item.id, { is_pinned: item.is_pinned });
     });
-    await refreshItems();
   };
 
   const handlePreview = (item: VaultItem) => {
@@ -161,13 +252,30 @@ export default function Dashboard({ onLock }: DashboardProps) {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.files.length > 0) {
+      const now = new Date().toISOString();
       for (const file of Array.from(e.dataTransfer.files)) {
+        const tempId = `temp-file-${Date.now()}-${Math.random()}`;
+        const isImage = file.type.startsWith("image/");
+        const isPdf = file.type === "application/pdf";
+        optimisticAdd({
+          id: tempId,
+          type: "file",
+          title: file.name,
+          category: isImage ? "image" : isPdf ? "pdf" : "other",
+          mime_type: file.type,
+          file_size: file.size,
+          is_pinned: false,
+          is_favorite: false,
+          created_at: now,
+          updated_at: now,
+        });
         const formData = new FormData();
         formData.append("file", file);
         formData.append("source", "upload");
-        await fetch("/api/files", { method: "POST", body: formData });
+        fetch("/api/files", { method: "POST", body: formData })
+          .then((res) => { if (res.ok) refreshItems(); })
+          .catch(() => {});
       }
-      await refreshItems();
     }
   };
 

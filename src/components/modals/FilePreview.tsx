@@ -23,23 +23,28 @@ export default function FilePreview() {
   const { showFilePreview, setShowFilePreview, selectedItem, refreshItems } = useVaultStore();
   const [copying, setCopying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [closing, setClosing] = useState(false);
 
-  // Swipe-down to close
+  // Swipe-down gesture state
   const sheetRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
-  const touchDeltaY = useRef(0);
+  const touchStartTime = useRef(0);
+  const currentDelta = useRef(0);
+  const isDragging = useRef(false);
 
   // Back button support
   useEffect(() => {
     if (!showFilePreview) return;
-
-    // Push a state so back button can pop it
     window.history.pushState({ filePreview: true }, "");
-
-    const handlePopState = () => setShowFilePreview(false);
+    const handlePopState = () => triggerClose();
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [showFilePreview, setShowFilePreview]);
+  }, [showFilePreview]);
+
+  // Reset closing state when modal opens
+  useEffect(() => {
+    if (showFilePreview) setClosing(false);
+  }, [showFilePreview]);
 
   if (!showFilePreview || !selectedItem || selectedItem.type !== "file") return null;
 
@@ -47,10 +52,30 @@ export default function FilePreview() {
   const previewUrl = `/api/files/download?id=${id}&action=preview`;
   const downloadUrl = `/api/files/download?id=${id}&action=download`;
 
+  // Animate sheet down then close
+  const triggerClose = () => {
+    if (closing) return;
+    const sheet = sheetRef.current;
+    if (sheet) {
+      setClosing(true);
+      sheet.style.transition = "transform 0.28s cubic-bezier(0.4,0,1,1)";
+      sheet.style.transform = "translateY(110%)";
+      setTimeout(() => {
+        setShowFilePreview(false);
+        setClosing(false);
+        if (sheet) {
+          sheet.style.transform = "";
+          sheet.style.transition = "";
+        }
+      }, 280);
+    } else {
+      setShowFilePreview(false);
+    }
+  };
+
   const handleClose = () => {
-    // If we pushed a history state, pop it
     if (window.history.state?.filePreview) window.history.back();
-    else setShowFilePreview(false);
+    else triggerClose();
   };
 
   const handleDelete = async () => {
@@ -75,33 +100,61 @@ export default function FilePreview() {
     setTimeout(() => setCopying(false), 1400);
   };
 
-  // Touch handlers for swipe-down
+  // ── Swipe-down gesture ──────────────────────────────────────────────────
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
-    touchDeltaY.current = 0;
+    touchStartTime.current = Date.now();
+    currentDelta.current = 0;
+    isDragging.current = false;
+
+    const sheet = sheetRef.current;
+    if (sheet) {
+      sheet.style.transition = "none";
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     const delta = e.touches[0].clientY - touchStartY.current;
-    touchDeltaY.current = delta;
-    if (delta > 0 && sheetRef.current) {
-      sheetRef.current.style.transform = `translateY(${delta}px)`;
-      sheetRef.current.style.transition = "none";
+    if (delta < 0) return; // only allow downward drag
+
+    currentDelta.current = delta;
+    isDragging.current = true;
+
+    const sheet = sheetRef.current;
+    if (sheet) {
+      // Add resistance beyond 150px so it feels natural
+      const resistance = delta > 150 ? 150 + (delta - 150) * 0.4 : delta;
+      sheet.style.transform = `translateY(${resistance}px)`;
     }
   };
 
   const handleTouchEnd = () => {
-    if (touchDeltaY.current > 100) {
-      // Swiped down enough — close
-      handleClose();
+    const sheet = sheetRef.current;
+    if (!isDragging.current) return;
+
+    const delta = currentDelta.current;
+    const elapsed = Date.now() - touchStartTime.current;
+    const velocity = delta / elapsed; // px/ms
+
+    // Close if dragged > 120px OR fast flick (velocity > 0.5 px/ms)
+    const shouldClose = delta > 120 || velocity > 0.5;
+
+    if (shouldClose) {
+      triggerClose();
     } else {
-      // Snap back
-      if (sheetRef.current) {
-        sheetRef.current.style.transform = "";
-        sheetRef.current.style.transition = "transform 0.3s ease";
+      // Snap back with spring
+      if (sheet) {
+        sheet.style.transition = "transform 0.35s cubic-bezier(0.34,1.56,0.64,1)";
+        sheet.style.transform = "translateY(0)";
+        setTimeout(() => {
+          if (sheet) sheet.style.transition = "";
+        }, 350);
       }
     }
+
+    isDragging.current = false;
   };
+  // ────────────────────────────────────────────────────────────────────────
 
   const renderPreview = () => {
     if (category === "image" || mime_type?.startsWith("image/")) {
@@ -110,6 +163,7 @@ export default function FilePreview() {
           src={previewUrl}
           alt={title}
           className="max-w-full max-h-full object-contain mx-auto rounded-lg"
+          draggable={false}
         />
       );
     }
@@ -142,7 +196,7 @@ export default function FilePreview() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop — click to close */}
+      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={handleClose}
@@ -152,11 +206,12 @@ export default function FilePreview() {
       <div
         ref={sheetRef}
         className="relative w-full sm:max-w-3xl h-[92dvh] sm:h-[88dvh] bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col animate-slide-up"
+        style={{ willChange: "transform", touchAction: "none" }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Drag handle — mobile */}
+        {/* Drag handle */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)] sm:hidden" />
 
         {/* Header */}
@@ -165,6 +220,7 @@ export default function FilePreview() {
             <h2 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] truncate">{title}</h2>
             <p className="text-xs text-[var(--text-muted)]">
               {getCategoryLabel(category!)} · {formatFileSize(file_size!)}
+              {" · "}<span className="text-[var(--text-muted)] opacity-70">Swipe down to close</span>
             </p>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -186,13 +242,12 @@ export default function FilePreview() {
           </div>
         </div>
 
-        {/* Preview area */}
+        {/* Preview area — allow internal scroll only when not at top */}
         <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0">
           {renderPreview()}
         </div>
       </div>
 
-      {/* Delete confirmation */}
       {confirmDelete && (
         <ConfirmDialog
           message={`"${title}" will be permanently deleted.`}

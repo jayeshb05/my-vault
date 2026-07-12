@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
   if (!password) return errorResponse("Password required");
 
   const valid = await checkPassword(password);
-  if (!valid) return errorResponse("Incorrect password", 401);
+  if (!valid) {
+    logActivity({ action: "login_failed", details: "Wrong password entered", req });
+    return errorResponse("Incorrect password", 401);
+  }
 
   const { token, sessionId } = await createSession(req, pwaInstalled);
   await setSessionCookie(token);

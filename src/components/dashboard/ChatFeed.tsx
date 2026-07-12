@@ -122,9 +122,48 @@ function ImageBubble({ item, onCopy, onPreview }: BubbleProps & { onCopy: (item:
 }
 
 function PdfBubble({ item, onCopy, onPreview }: BubbleProps & { onCopy: (item: VaultItem) => void; onPreview?: (item: VaultItem) => void }) {
-  const url = `/api/files/download?id=${item.id}&action=preview`;
   const downloadUrl = `/api/files/download?id=${item.id}&action=download`;
   const [copying, setCopying] = useState(false);
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [thumbLoading, setThumbLoading] = useState(true);
+
+  // Render first page of PDF to canvas thumbnail
+  useEffect(() => {
+    let cancelled = false;
+    async function renderThumb() {
+      try {
+        const res = await fetch(`/api/files/download?id=${item.id}&action=preview`);
+        if (!res.ok) return;
+        const data = await res.arrayBuffer();
+
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).toString();
+
+        const pdf = await pdfjs.getDocument({ data }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 0.8 });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (!cancelled) setThumbnail(canvas.toDataURL("image/jpeg", 0.85));
+      } catch {
+        // leave thumbnail null — show fallback icon
+      } finally {
+        if (!cancelled) setThumbLoading(false);
+      }
+    }
+    renderThumb();
+    return () => { cancelled = true; };
+  }, [item.id]);
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,19 +174,36 @@ function PdfBubble({ item, onCopy, onPreview }: BubbleProps & { onCopy: (item: V
 
   return (
     <div className="bg-[var(--bubble-out)] rounded-lg rounded-tr-none overflow-hidden shadow-sm w-[min(240px,78vw)]">
+      {/* Thumbnail */}
       <div
-        className="h-[110px] sm:h-[120px] bg-[#525252] overflow-hidden relative cursor-pointer"
+        className="h-[130px] sm:h-[150px] overflow-hidden relative cursor-pointer bg-white"
         onClick={(e) => { e.stopPropagation(); onPreview?.(item); }}
       >
-        <iframe
-          src={`${url}#toolbar=0&navpanes=0`}
-          className="w-full h-[160px] pointer-events-none origin-top"
-          title={item.title}
-        />
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
+        {thumbLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#f5f5f5]">
+            <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {thumbnail ? (
+          <img
+            src={thumbnail}
+            alt="PDF preview"
+            className="w-full h-full object-cover object-top"
+          />
+        ) : !thumbLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#f5f5f5] gap-2">
+            <div className="w-10 h-10 rounded bg-red-500 flex items-center justify-center">
+              <span className="text-white text-[10px] font-bold">PDF</span>
+            </div>
+          </div>
+        ) : null}
+        {/* Eye overlay on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity bg-black/20">
           <Eye className="w-6 h-6 text-white drop-shadow" />
         </div>
       </div>
+
+      {/* File info */}
       <div className="px-2.5 py-2 flex items-start gap-2 border-t border-white/10">
         <div className="w-8 h-8 rounded bg-red-500/90 flex items-center justify-center shrink-0">
           <span className="text-white text-[9px] font-bold">PDF</span>
@@ -159,6 +215,8 @@ function PdfBubble({ item, onCopy, onPreview }: BubbleProps & { onCopy: (item: V
           </p>
         </div>
       </div>
+
+      {/* Actions */}
       <div className="flex border-t border-white/10">
         <button
           onClick={handleCopy}

@@ -10,9 +10,9 @@ interface ConfirmDialogProps {
 
 export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative w-full sm:max-w-sm mx-4 mb-6 sm:mb-0 bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] shadow-2xl p-5 animate-slide-up">
+      <div className="relative w-full max-w-sm mx-4 bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] shadow-2xl p-5 animate-slide-up">
         {/* Icon */}
         <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center mb-3">
           <Trash2 className="w-5 h-5 text-red-500" />

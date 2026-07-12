@@ -2,12 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
-  // Allow larger file uploads (for share target from gallery/file manager)
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "10mb",
-    },
-  },
   headers: async () => [
     {
       source: "/(.*)",

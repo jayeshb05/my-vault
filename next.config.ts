@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // No native modules needed anymore — Supabase is pure JS
   devIndicators: false,
+  // Allow larger file uploads (for share target from gallery/file manager)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   headers: async () => [
     {
       source: "/(.*)",

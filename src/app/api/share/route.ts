@@ -71,13 +71,13 @@ export async function POST(req: NextRequest) {
 
     const total = (textContent.trim() ? 1 : 0) + savedFiles;
     return NextResponse.redirect(
-      new URL(`/share?done=1&files_saved=${savedFiles}&total=${total}`, req.url),
+      new URL(`/?shared=1&count=${total}`, req.url),
       { status: 303 }
     );
   } catch (err) {
     console.error("[share POST]", err);
     return NextResponse.redirect(
-      new URL("/share?error=1", req.url),
+      new URL("/", req.url),
       { status: 303 }
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useVaultStore } from "@/store/vault-store";
 import Header from "@/components/dashboard/Header";
 import FilterTabs from "@/components/dashboard/FilterTabs";
@@ -9,10 +9,16 @@ import BottomComposeBar, { type Attachment } from "@/components/dashboard/Bottom
 import ActivityCenter from "@/components/modals/ActivityCenter";
 import SettingsModal from "@/components/modals/SettingsModal";
 import FilePreview from "@/components/modals/FilePreview";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { VaultItem } from "@/lib/types";
 
 interface DashboardProps {
   onLock: () => void;
+}
+
+interface PendingDelete {
+  items: VaultItem[];
+  message: string;
 }
 
 export default function Dashboard({ onLock }: DashboardProps) {
@@ -31,16 +37,14 @@ export default function Dashboard({ onLock }: DashboardProps) {
     setEditingNoteId,
   } = useVaultStore();
 
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+
   useEffect(() => {
     refreshItems();
-
-    // Keep session alive
     fetch("/api/auth/login", { method: "PUT" }).catch(() => {});
-
     const interval = setInterval(() => {
       fetch("/api/auth/login", { method: "PUT" }).catch(() => {});
     }, 5 * 60 * 1000);
-
     return () => clearInterval(interval);
   }, [refreshItems]);
 
@@ -73,7 +77,6 @@ export default function Dashboard({ onLock }: DashboardProps) {
         });
         if (!res.ok) return false;
       }
-
       for (const att of attachments) {
         const formData = new FormData();
         formData.append("file", att.file);
@@ -81,9 +84,7 @@ export default function Dashboard({ onLock }: DashboardProps) {
         const res = await fetch("/api/files", { method: "POST", body: formData });
         if (!res.ok) return false;
       }
-
       if (!text.trim() && attachments.length === 0) return false;
-
       await refreshItems();
       return true;
     } catch {
@@ -91,19 +92,32 @@ export default function Dashboard({ onLock }: DashboardProps) {
     }
   };
 
-  const handleDelete = async (item: VaultItem) => {
-    if (!confirm(`Delete "${item.title}"?`)) return;
-    const endpoint = item.type === "note" ? `/api/notes?id=${item.id}` : `/api/files?id=${item.id}`;
-    await fetch(endpoint, { method: "DELETE" });
-    await refreshItems();
-  };
-
-  const handleBulkDelete = async (toDelete: VaultItem[]) => {
+  const doDelete = async (toDelete: VaultItem[]) => {
     for (const item of toDelete) {
       const endpoint = item.type === "note" ? `/api/notes?id=${item.id}` : `/api/files?id=${item.id}`;
       await fetch(endpoint, { method: "DELETE" });
     }
     await refreshItems();
+  };
+
+  const handleDelete = (item: VaultItem) => {
+    setPendingDelete({
+      items: [item],
+      message: `"${item.title}" will be permanently deleted.`,
+    });
+  };
+
+  const handleBulkDelete = (toDelete: VaultItem[]) => {
+    setPendingDelete({
+      items: toDelete,
+      message: `${toDelete.length} item${toDelete.length > 1 ? "s" : ""} will be permanently deleted.`,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setPendingDelete(null);
+    await doDelete(pendingDelete.items);
   };
 
   const handleFavorite = async (item: VaultItem) => {
@@ -163,17 +177,14 @@ export default function Dashboard({ onLock }: DashboardProps) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Header — always sticky at top */}
       <Header onLock={onLock} onSearch={handleSearch} />
 
-      {/* Filter tabs — sticky below header, never scrolls away */}
       {!isSearching && (
         <div className="shrink-0 sticky top-0 z-20 bg-[var(--bg-primary)]">
           <FilterTabs />
         </div>
       )}
 
-      {/* Scrollable feed */}
       <main className="flex-1 overflow-y-auto pb-28">
         <ChatFeed
           items={displayItems}
@@ -190,6 +201,15 @@ export default function Dashboard({ onLock }: DashboardProps) {
       <ActivityCenter />
       <SettingsModal />
       <FilePreview />
+
+      {/* Custom delete confirmation dialog */}
+      {pendingDelete && (
+        <ConfirmDialog
+          message={pendingDelete.message}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

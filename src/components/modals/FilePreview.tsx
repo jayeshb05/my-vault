@@ -5,6 +5,7 @@ import { X, Download, Star, Trash2, Copy } from "lucide-react";
 import { useVaultStore } from "@/store/vault-store";
 import { formatFileSize, getCategoryLabel } from "@/lib/utils";
 import { copyVaultItem } from "@/lib/clipboard";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 function TextPreview({ url }: { url: string }) {
   const [text, setText] = useState("Loading...");
@@ -21,6 +22,7 @@ function TextPreview({ url }: { url: string }) {
 export default function FilePreview() {
   const { showFilePreview, setShowFilePreview, selectedItem, refreshItems } = useVaultStore();
   const [copying, setCopying] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Swipe-down to close
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -52,7 +54,7 @@ export default function FilePreview() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Delete this file?")) return;
+    setConfirmDelete(false);
     await fetch(`/api/files?id=${id}`, { method: "DELETE" });
     await refreshItems();
     handleClose();
@@ -175,7 +177,7 @@ export default function FilePreview() {
             <a href={downloadUrl} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)] text-[var(--text-muted)]" title="Download">
               <Download className="w-4 h-4" />
             </a>
-            <button onClick={handleDelete} className="p-2 rounded-lg hover:bg-red-500/10 active:bg-red-500/10 text-red-500" title="Delete">
+            <button onClick={() => setConfirmDelete(true)} className="p-2 rounded-lg hover:bg-red-500/10 active:bg-red-500/10 text-red-500" title="Delete">
               <Trash2 className="w-4 h-4" />
             </button>
             <button onClick={handleClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)] text-[var(--text-muted)]" title="Close">
@@ -189,6 +191,15 @@ export default function FilePreview() {
           {renderPreview()}
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <ConfirmDialog
+          message={`"${title}" will be permanently deleted.`}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }

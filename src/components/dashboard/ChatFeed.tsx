@@ -472,11 +472,9 @@ export default function ChatFeed({
 
   const handleBulkDelete = () => {
     if (selectedItems.length === 0) return;
-    if (!confirm(`Delete ${selectedItems.length} item(s)?`)) return;
-    if (onBulkDelete) {
-      onBulkDelete(selectedItems);
-    } else {
-      selectedItems.forEach((item) => onDelete(item));
+    onDelete(selectedItems[0]);
+    if (selectedItems.length > 1) {
+      selectedItems.slice(1).forEach((item) => onDelete(item));
     }
     exitMultiSelect();
   };

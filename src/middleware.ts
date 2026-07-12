@@ -12,6 +12,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow all /share requests — both GET page and POST Web Share Target
+  if (pathname === "/share" || pathname.startsWith("/share?")) {
+    return NextResponse.next();
+  }
+
   if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }

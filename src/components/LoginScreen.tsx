@@ -63,8 +63,8 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
 
       <div className="w-full max-w-md relative">
         <div className="text-center mb-8 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--accent)] bg-opacity-10 mb-4">
-            <Shield className="w-8 h-8 text-[var(--accent)]" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-[var(--accent)] mb-4 shadow-lg shadow-[var(--accent)]/30">
+            <Shield className="w-10 h-10 text-white fill-white" />
           </div>
           <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">My Vault</h1>
           <p className="text-[var(--text-secondary)]">

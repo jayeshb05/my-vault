@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { verifySessionToken, isTokenExpired, COOKIE_NAME } from "@/lib/session-edge";
 
-const PUBLIC_PATHS = ["/", "/api/auth/login", "/api/auth/setup", "/api/auth/status", "/share"];
+const PUBLIC_PATHS = ["/", "/api/auth/login", "/api/auth/setup", "/api/auth/status", "/share", "/api/share"];
 const STATIC_PATHS = ["/_next", "/favicon.ico", "/manifest.json", "/sw.js", "/icons", "/robots.txt"];
 
 export async function middleware(request: NextRequest) {

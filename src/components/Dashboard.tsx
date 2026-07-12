@@ -159,12 +159,21 @@ export default function Dashboard({ onLock }: DashboardProps) {
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-primary)] flex flex-col"
+      className="h-screen bg-[var(--bg-primary)] flex flex-col overflow-hidden"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {/* Header — always sticky at top */}
       <Header onLock={onLock} onSearch={handleSearch} />
-      {!isSearching && <FilterTabs />}
+
+      {/* Filter tabs — sticky below header, never scrolls away */}
+      {!isSearching && (
+        <div className="shrink-0 sticky top-0 z-20 bg-[var(--bg-primary)]">
+          <FilterTabs />
+        </div>
+      )}
+
+      {/* Scrollable feed */}
       <main className="flex-1 overflow-y-auto pb-28">
         <ChatFeed
           items={displayItems}
@@ -176,6 +185,7 @@ export default function Dashboard({ onLock }: DashboardProps) {
           onPreview={handlePreview}
         />
       </main>
+
       <BottomComposeBar onSend={handleSend} />
       <ActivityCenter />
       <SettingsModal />

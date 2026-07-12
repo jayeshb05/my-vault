@@ -1,54 +1,63 @@
-import fs from "fs";
-import path from "path";
-import type { Archiver } from "archiver";
-import AdmZip from "adm-zip";
-import { DATA_DIR, DB_PATH } from "./db";
-import { UPLOADS_DIR } from "./storage";
+// backup.ts — JSON-based backup for Supabase
+// Exports all notes + file metadata as a JSON zip.
+// Files themselves are stored in Supabase Storage and accessible via URL.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const createArchiver = require("archiver") as (
-  format: string,
-  options?: { zlib?: { level: number } }
-) => Archiver;
+import AdmZip from "adm-zip";
+import { supabaseAdmin } from "./supabase";
 
 export async function createBackup(): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const archive = createArchiver("zip", { zlib: { level: 9 } });
+  // Fetch all data from Supabase
+  const [{ data: notes }, { data: files }, { data: settings }] = await Promise.all([
+    supabaseAdmin.from("notes").select("*").order("created_at"),
+    supabaseAdmin.from("files").select("*").order("created_at"),
+    supabaseAdmin.from("settings").select("*").eq("id", 1).single(),
+  ]);
 
-    archive.on("data", (chunk: Buffer) => chunks.push(chunk));
-    archive.on("end", () => resolve(Buffer.concat(chunks)));
-    archive.on("error", reject);
+  const backup = {
+    version: 2,
+    exported_at: new Date().toISOString(),
+    notes: notes ?? [],
+    files: files ?? [],
+    settings: settings ?? {},
+  };
 
-    if (fs.existsSync(DB_PATH)) {
-      archive.file(DB_PATH, { name: "vault.db" });
-    }
+  const zip = new AdmZip();
+  zip.addFile("vault-backup.json", Buffer.from(JSON.stringify(backup, null, 2)));
 
-    if (fs.existsSync(UPLOADS_DIR)) {
-      archive.directory(UPLOADS_DIR, "uploads");
-    }
+  // Also export file list with storage paths for reference
+  const fileList = (files ?? []).map((f) => ({
+    id: f.id,
+    name: f.original_name,
+    size: f.file_size,
+    type: f.mime_type,
+    stored_as: f.stored_name,
+  }));
+  zip.addFile("file-list.json", Buffer.from(JSON.stringify(fileList, null, 2)));
 
-    archive.finalize();
-  });
+  return zip.toBuffer();
 }
 
 export async function restoreBackup(buffer: Buffer): Promise<void> {
   const zip = new AdmZip(buffer);
-  const entries = zip.getEntries();
+  const entry = zip.getEntry("vault-backup.json");
+  if (!entry) throw new Error("Invalid backup: vault-backup.json not found");
 
-  for (const entry of entries) {
-    if (entry.isDirectory) continue;
-    const content = entry.getData();
-    const filePath = entry.entryName;
+  const backup = JSON.parse(entry.getData().toString("utf8"));
 
-    if (filePath === "vault.db") {
-      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(DB_PATH, content);
-    } else if (filePath.startsWith("uploads/")) {
-      const destPath = path.join(process.cwd(), filePath);
-      const destDir = path.dirname(destPath);
-      if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-      fs.writeFileSync(destPath, content);
-    }
+  // Restore notes
+  if (Array.isArray(backup.notes) && backup.notes.length > 0) {
+    await supabaseAdmin.from("notes").upsert(backup.notes, { onConflict: "id" });
+  }
+
+  // Restore file metadata (actual files in storage not restored — only metadata)
+  if (Array.isArray(backup.files) && backup.files.length > 0) {
+    await supabaseAdmin.from("files").upsert(backup.files, { onConflict: "id" });
+  }
+
+  // Restore settings (preserve password_hash)
+  if (backup.settings?.id === 1) {
+    await supabaseAdmin
+      .from("settings")
+      .upsert(backup.settings, { onConflict: "id" });
   }
 }

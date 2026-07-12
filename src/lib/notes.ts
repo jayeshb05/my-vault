@@ -1,113 +1,128 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDb } from "./db";
+import { supabaseAdmin } from "./supabase";
 import { generateTitle } from "./utils";
 import { getAllFiles } from "./storage";
 import type { Note, VaultFile } from "./types";
 
-export function createNote(content: string, title?: string): Note {
+// ─── Create ──────────────────────────────────────────────────────────────────
+export async function createNote(content: string, title?: string): Promise<Note> {
   const id = uuidv4();
   const noteTitle = title || generateTitle(content);
   const now = new Date().toISOString();
-  const db = getDb();
 
-  db.prepare(
-    `INSERT INTO notes (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
-  ).run(id, noteTitle, content, now, now);
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .insert({ id, title: noteTitle, content, is_pinned: false, is_favorite: false, created_at: now, updated_at: now })
+    .select()
+    .single();
 
-  return {
-    id,
-    title: noteTitle,
-    content,
-    is_pinned: 0,
-    is_favorite: 0,
-    created_at: now,
-    updated_at: now,
-  };
+  if (error) throw new Error(error.message);
+  return dbRowToNote(data);
 }
 
-export function getNote(id: string): Note | undefined {
-  const db = getDb();
-  return db.prepare("SELECT * FROM notes WHERE id = ?").get(id) as Note | undefined;
+// ─── Read ─────────────────────────────────────────────────────────────────────
+export async function getNote(id: string): Promise<Note | undefined> {
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return undefined;
+  return dbRowToNote(data);
 }
 
-export function updateNote(id: string, updates: { title?: string; content?: string }): Note | null {
-  const db = getDb();
-  const note = getNote(id);
+export async function getAllNotes(filter?: string): Promise<Note[]> {
+  let query = supabaseAdmin.from("notes").select("*");
+
+  if (filter === "favorites") {
+    query = query.eq("is_favorite", true);
+  }
+
+  const { data, error } = await query
+    .order("is_pinned", { ascending: false })
+    .order("updated_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data.map(dbRowToNote);
+}
+
+export async function searchNotes(q: string): Promise<Note[]> {
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .select("*")
+    .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+    .order("updated_at", { ascending: false })
+    .limit(50);
+
+  if (error || !data) return [];
+  return data.map(dbRowToNote);
+}
+
+// ─── Update ───────────────────────────────────────────────────────────────────
+export async function updateNote(
+  id: string,
+  updates: { title?: string; content?: string }
+): Promise<Note | null> {
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+  return dbRowToNote(data);
+}
+
+export async function toggleNotePin(id: string): Promise<Note | null> {
+  const note = await getNote(id);
   if (!note) return null;
 
-  const title = updates.title ?? note.title;
-  const content = updates.content ?? note.content;
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .update({ is_pinned: !note.is_pinned, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
 
-  db.prepare(
-    `UPDATE notes SET title = ?, content = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(title, content, id);
-
-  return { ...note, title, content, updated_at: new Date().toISOString() };
+  if (error || !data) return null;
+  return dbRowToNote(data);
 }
 
-export function deleteNote(id: string): boolean {
-  const db = getDb();
-  const result = db.prepare("DELETE FROM notes WHERE id = ?").run(id);
-  return result.changes > 0;
-}
-
-export function toggleNotePin(id: string): Note | null {
-  const db = getDb();
-  const note = getNote(id);
+export async function toggleNoteFavorite(id: string): Promise<Note | null> {
+  const note = await getNote(id);
   if (!note) return null;
 
-  const newVal = note.is_pinned ? 0 : 1;
-  db.prepare(
-    `UPDATE notes SET is_pinned = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(newVal, id);
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .update({ is_favorite: !note.is_favorite, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
 
-  return { ...note, is_pinned: newVal, updated_at: new Date().toISOString() };
+  if (error || !data) return null;
+  return dbRowToNote(data);
 }
 
-export function toggleNoteFavorite(id: string): Note | null {
-  const db = getDb();
-  const note = getNote(id);
-  if (!note) return null;
-
-  const newVal = note.is_favorite ? 0 : 1;
-  db.prepare(
-    `UPDATE notes SET is_favorite = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(newVal, id);
-
-  return { ...note, is_favorite: newVal, updated_at: new Date().toISOString() };
-}
-
-export function duplicateNote(id: string): Note | null {
-  const note = getNote(id);
+export async function duplicateNote(id: string): Promise<Note | null> {
+  const note = await getNote(id);
   if (!note) return null;
   return createNote(note.content, `${note.title} (copy)`);
 }
 
-export function getAllNotes(filter?: string): Note[] {
-  const db = getDb();
-  let query = "SELECT * FROM notes";
-  const params: number[] = [];
-
-  if (filter === "favorites") {
-    query += " WHERE is_favorite = 1";
-  }
-
-  query += " ORDER BY is_pinned DESC, updated_at DESC";
-  return db.prepare(query).all(...params) as Note[];
+// ─── Delete ───────────────────────────────────────────────────────────────────
+export async function deleteNote(id: string): Promise<boolean> {
+  const { error } = await supabaseAdmin.from("notes").delete().eq("id", id);
+  return !error;
 }
 
-export function searchNotes(query: string): Note[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT * FROM notes WHERE title LIKE ? OR content LIKE ? ORDER BY updated_at DESC LIMIT 50`
-    )
-    .all(`%${query}%`, `%${query}%`) as Note[];
-}
-
-export function getVaultItems(filter?: string) {
-  const notes = getAllNotes(filter);
-  const files = getAllFiles(filter);
+// ─── Vault items (notes + files combined) ─────────────────────────────────────
+export async function getVaultItems(filter?: string) {
+  const [notes, files] = await Promise.all([
+    getAllNotes(filter),
+    getAllFiles(filter),
+  ]);
 
   const items = [
     ...notes.map((n: Note) => ({
@@ -147,4 +162,18 @@ export function getVaultItems(filter?: string) {
   });
 
   return items;
+}
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dbRowToNote(row: any): Note {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    is_pinned: row.is_pinned ? 1 : 0,
+    is_favorite: row.is_favorite ? 1 : 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }

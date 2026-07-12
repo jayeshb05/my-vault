@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { v4 as uuidv4 } from "uuid";
-import { getDb } from "./db";
+import { supabaseAdmin } from "./supabase";
 import { parseUserAgent } from "./utils";
 import { COOKIE_NAME, type SessionPayload, signSession, verifySessionToken } from "./session-edge";
 
@@ -26,11 +26,15 @@ export async function createSession(
     req.headers.get("x-real-ip") ??
     "unknown";
 
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO sessions (id, login_at, device_name, browser, os, ip_address, pwa_installed)
-     VALUES (?, datetime('now'), ?, ?, ?, ?, ?)`
-  ).run(sessionId, device, browser, os, ip, pwaInstalled ? 1 : 0);
+  await supabaseAdmin.from("sessions").insert({
+    id: sessionId,
+    login_at: new Date().toISOString(),
+    device_name: device,
+    browser,
+    os,
+    ip_address: ip,
+    pwa_installed: pwaInstalled,
+  });
 
   const token = await signSession({
     sessionId,
@@ -39,10 +43,6 @@ export async function createSession(
   });
 
   return { token, sessionId };
-}
-
-export async function verifySession(token: string): Promise<SessionPayload | null> {
-  return verifySessionToken(token);
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
@@ -70,36 +70,35 @@ export async function clearSessionCookie() {
 }
 
 export async function refreshSession(session: SessionPayload): Promise<string> {
-  return signSession({
-    ...session,
-    lastActivity: Date.now(),
-  });
+  return signSession({ ...session, lastActivity: Date.now() });
 }
 
 export async function endSession(sessionId: string) {
-  const db = getDb();
-  const session = db
-    .prepare(`SELECT login_at FROM sessions WHERE id = ? AND logout_at IS NULL`)
-    .get(sessionId) as { login_at: string } | undefined;
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("login_at")
+    .eq("id", sessionId)
+    .is("logout_at", null)
+    .single();
 
-  if (session) {
-    const loginTime = new Date(session.login_at).getTime();
-    const duration = Math.floor((Date.now() - loginTime) / 1000);
-    db.prepare(
-      `UPDATE sessions SET logout_at = datetime('now'), duration_seconds = ? WHERE id = ?`
-    ).run(duration, sessionId);
+  if (data) {
+    const duration = Math.floor((Date.now() - new Date(data.login_at).getTime()) / 1000);
+    await supabaseAdmin
+      .from("sessions")
+      .update({ logout_at: new Date().toISOString(), duration_seconds: duration })
+      .eq("id", sessionId);
   }
 }
 
 export async function isSessionExpired(session: SessionPayload): Promise<boolean> {
-  const db = getDb();
-  const settings = db.prepare("SELECT auto_lock_minutes FROM settings WHERE id = 1").get() as
-    | { auto_lock_minutes: number }
-    | undefined;
+  const { data } = await supabaseAdmin
+    .from("settings")
+    .select("auto_lock_minutes")
+    .eq("id", 1)
+    .single();
 
-  const lockMinutes = settings?.auto_lock_minutes ?? 15;
-  const lockMs = lockMinutes * 60 * 1000;
-  return Date.now() - session.lastActivity > lockMs;
+  const lockMinutes = data?.auto_lock_minutes ?? 15;
+  return Date.now() - session.lastActivity > lockMinutes * 60 * 1000;
 }
 
 export async function setActivityAuth(password: string): Promise<boolean> {

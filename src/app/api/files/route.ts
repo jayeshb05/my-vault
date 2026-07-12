@@ -1,16 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth, jsonResponse, errorResponse } from "@/lib/api-helpers";
-import {
-  saveFile,
-  getFile,
-  deleteFile,
-  renameFile,
-  toggleFileFavorite,
-  getFilePath,
-} from "@/lib/storage";
+import { saveFile, getFile, deleteFile, renameFile, toggleFileFavorite } from "@/lib/storage";
 import { logActivity } from "@/lib/activity";
-import fs from "fs";
-import path from "path";
 
 export async function POST(req: NextRequest) {
   const { error, session } = await requireAuth(req);
@@ -32,14 +23,7 @@ export async function POST(req: NextRequest) {
     camera: "camera_upload",
   };
 
-  logActivity({
-    action: actionMap[source] ?? "upload",
-    details: `Uploaded: ${saved.original_name}`,
-    contentType: "file",
-    contentId: saved.id,
-    sessionId: session!.sessionId,
-    req,
-  });
+  logActivity({ action: actionMap[source] ?? "upload", details: `Uploaded: ${saved.original_name}`, contentType: "file", contentId: saved.id, sessionId: session!.sessionId, req });
 
   return jsonResponse({ file: saved }, 201);
 }
@@ -52,14 +36,14 @@ export async function PUT(req: NextRequest) {
   if (!id) return errorResponse("ID required");
 
   if (action === "rename" && name) {
-    const file = renameFile(id, name);
+    const file = await renameFile(id, name);
     if (!file) return errorResponse("File not found", 404);
     logActivity({ action: "file_rename", details: `Renamed to: ${name}`, contentType: "file", contentId: id, sessionId: session!.sessionId, req });
     return jsonResponse({ file });
   }
 
   if (action === "favorite") {
-    const file = toggleFileFavorite(id);
+    const file = await toggleFileFavorite(id);
     if (!file) return errorResponse("File not found", 404);
     logActivity({ action: "file_favorite", details: `Favorite toggled: ${file.original_name}`, contentType: "file", contentId: id, sessionId: session!.sessionId, req });
     return jsonResponse({ file });
@@ -75,8 +59,8 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return errorResponse("ID required");
 
-  const file = getFile(id);
-  const deleted = deleteFile(id);
+  const file = await getFile(id);
+  const deleted = await deleteFile(id);
   if (!deleted) return errorResponse("File not found", 404);
 
   logActivity({ action: "file_delete", details: `Deleted: ${file?.original_name}`, contentType: "file", contentId: id, sessionId: session!.sessionId, req });

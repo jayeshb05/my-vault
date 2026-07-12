@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  serverExternalPackages: ["better-sqlite3", "archiver", "adm-zip"],
+  // No native modules needed anymore — Supabase is pure JS
   devIndicators: false,
   headers: async () => [
     {

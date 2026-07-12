@@ -1,13 +1,17 @@
 import { NextRequest } from "next/server";
-import { getDb } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { requireAuth, jsonResponse } from "@/lib/api-helpers";
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAuth(req);
   if (error) return error;
 
-  const db = getDb();
-  const settings = db.prepare("SELECT auto_lock_minutes, theme, setup_complete FROM settings WHERE id = 1").get();
+  const { data: settings } = await supabaseAdmin
+    .from("settings")
+    .select("auto_lock_minutes, theme, setup_complete")
+    .eq("id", 1)
+    .single();
+
   return jsonResponse({ settings });
 }
 
@@ -16,15 +20,17 @@ export async function PUT(req: NextRequest) {
   if (error) return error;
 
   const { auto_lock_minutes, theme } = await req.json();
-  const db = getDb();
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
-  if (auto_lock_minutes !== undefined) {
-    db.prepare("UPDATE settings SET auto_lock_minutes = ?, updated_at = datetime('now') WHERE id = 1").run(auto_lock_minutes);
-  }
-  if (theme !== undefined) {
-    db.prepare("UPDATE settings SET theme = ?, updated_at = datetime('now') WHERE id = 1").run(theme);
-  }
+  if (auto_lock_minutes !== undefined) updates.auto_lock_minutes = auto_lock_minutes;
+  if (theme !== undefined) updates.theme = theme;
 
-  const settings = db.prepare("SELECT auto_lock_minutes, theme, setup_complete FROM settings WHERE id = 1").get();
+  const { data: settings } = await supabaseAdmin
+    .from("settings")
+    .update(updates)
+    .eq("id", 1)
+    .select("auto_lock_minutes, theme, setup_complete")
+    .single();
+
   return jsonResponse({ settings });
 }

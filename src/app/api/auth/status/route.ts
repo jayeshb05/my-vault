@@ -3,9 +3,12 @@ import { getSession } from "@/lib/session";
 import { jsonResponse } from "@/lib/api-helpers";
 
 export async function GET() {
-  const session = await getSession();
+  const [setupRequired, session] = await Promise.all([
+    needsSetup(),
+    getSession(),
+  ]);
   return jsonResponse({
-    setupRequired: needsSetup(),
+    setupRequired,
     authenticated: !!session?.authenticated,
   });
 }

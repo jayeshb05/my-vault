@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, errorResponse } from "@/lib/api-helpers";
-import { getFile, getFilePath } from "@/lib/storage";
+import { getFile, downloadFile } from "@/lib/storage";
 import { logActivity } from "@/lib/activity";
-import fs from "fs";
 
 export async function GET(req: NextRequest) {
   const { error, session } = await requireAuth(req);
@@ -13,15 +12,11 @@ export async function GET(req: NextRequest) {
 
   if (!id) return errorResponse("ID required");
 
-  const file = getFile(id);
+  const file = await getFile(id);
   if (!file) return errorResponse("File not found", 404);
 
-  const filePath = getFilePath(id);
-  if (!filePath || !fs.existsSync(filePath)) {
-    return errorResponse("File not found on disk", 404);
-  }
-
-  const buffer = fs.readFileSync(filePath);
+  const buffer = await downloadFile(id);
+  if (!buffer) return errorResponse("File not found in storage", 404);
 
   logActivity({
     action: action === "preview" ? "preview" : "download",
@@ -34,12 +29,11 @@ export async function GET(req: NextRequest) {
 
   const headers = new Headers();
   headers.set("Content-Type", file.mime_type);
-  if (action === "download") {
-    headers.set("Content-Disposition", `attachment; filename="${file.original_name}"`);
-  } else {
-    headers.set("Content-Disposition", `inline; filename="${file.original_name}"`);
-  }
+  headers.set(
+    "Content-Disposition",
+    `${action === "download" ? "attachment" : "inline"}; filename="${file.original_name}"`
+  );
   headers.set("Content-Length", buffer.length.toString());
 
-  return new NextResponse(buffer, { headers });
+  return new NextResponse(new Uint8Array(buffer), { headers });
 }

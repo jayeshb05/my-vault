@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { getDb, getSettings, isSetupComplete } from "./db";
+import { supabaseAdmin } from "./supabase";
 
 const SALT_ROUNDS = 12;
 
@@ -11,25 +11,43 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
+async function getSettings() {
+  const { data } = await supabaseAdmin
+    .from("settings")
+    .select("*")
+    .eq("id", 1)
+    .single();
+  return data;
+}
+
+export async function isSetupComplete(): Promise<boolean> {
+  const settings = await getSettings();
+  return settings?.setup_complete === true;
+}
+
+export async function needsSetup(): Promise<boolean> {
+  return !(await isSetupComplete());
+}
+
 export async function setupPassword(password: string): Promise<void> {
-  const db = getDb();
   const hash = await hashPassword(password);
-  const existing = db.prepare("SELECT id FROM settings WHERE id = 1").get();
+  const existing = await getSettings();
 
   if (existing) {
-    db.prepare(
-      `UPDATE settings SET password_hash = ?, setup_complete = 1, updated_at = datetime('now') WHERE id = 1`
-    ).run(hash);
+    await supabaseAdmin
+      .from("settings")
+      .update({ password_hash: hash, setup_complete: true, updated_at: new Date().toISOString() })
+      .eq("id", 1);
   } else {
-    db.prepare(
-      `INSERT INTO settings (id, password_hash, setup_complete) VALUES (1, ?, 1)`
-    ).run(hash);
+    await supabaseAdmin
+      .from("settings")
+      .insert({ id: 1, password_hash: hash, setup_complete: true });
   }
 }
 
 export async function checkPassword(password: string): Promise<boolean> {
-  if (!isSetupComplete()) return false;
-  const settings = getSettings();
+  if (await needsSetup()) return false;
+  const settings = await getSettings();
   if (!settings?.password_hash) return false;
   return verifyPassword(password, settings.password_hash);
 }
@@ -42,14 +60,14 @@ export async function changePassword(
   if (!valid) return { success: false, error: "Current password is incorrect" };
 
   const hash = await hashPassword(newPassword);
-  const db = getDb();
-  db.prepare(
-    `UPDATE settings SET password_hash = ?, updated_at = datetime('now') WHERE id = 1`
-  ).run(hash);
+  await supabaseAdmin
+    .from("settings")
+    .update({ password_hash: hash, updated_at: new Date().toISOString() })
+    .eq("id", 1);
 
   return { success: true };
 }
 
-export function needsSetup(): boolean {
-  return !isSetupComplete();
+export async function getAppSettings() {
+  return getSettings();
 }

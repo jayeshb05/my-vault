@@ -1,32 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDb } from "./db";
+import { supabaseAdmin } from "./supabase";
 import { parseUserAgent } from "./utils";
 
 export type ActivityAction =
-  | "login"
-  | "logout"
-  | "upload"
-  | "download"
-  | "preview"
-  | "note_create"
-  | "note_edit"
-  | "note_delete"
-  | "note_copy"
-  | "note_duplicate"
-  | "note_pin"
-  | "file_rename"
-  | "file_delete"
-  | "file_favorite"
-  | "search"
-  | "filter"
-  | "share_upload"
-  | "clipboard_paste"
-  | "camera_upload"
-  | "password_change"
-  | "lock"
-  | "unlock"
-  | "backup"
-  | "restore";
+  | "login" | "logout" | "upload" | "download" | "preview"
+  | "note_create" | "note_edit" | "note_delete" | "note_copy"
+  | "note_duplicate" | "note_pin" | "file_rename" | "file_delete"
+  | "file_favorite" | "search" | "filter" | "share_upload"
+  | "clipboard_paste" | "camera_upload" | "password_change"
+  | "lock" | "unlock" | "backup" | "restore";
 
 interface LogOptions {
   action: ActivityAction;
@@ -38,8 +20,8 @@ interface LogOptions {
   pwaInstalled?: boolean;
 }
 
-export function logActivity(opts: LogOptions) {
-  const db = getDb();
+// Fire-and-forget — we don't await this in hot paths
+export function logActivity(opts: LogOptions): void {
   const id = uuidv4();
   let browser: string | null = null;
   let os: string | null = null;
@@ -58,88 +40,66 @@ export function logActivity(opts: LogOptions) {
       null;
   }
 
-  db.prepare(
-    `INSERT INTO activity_logs
-     (id, action, details, content_type, content_id, device_name, browser, os, ip_address, pwa_installed, session_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  supabaseAdmin.from("activity_logs").insert({
     id,
-    opts.action,
-    opts.details ?? "",
-    opts.contentType ?? null,
-    opts.contentId ?? null,
-    device,
+    action: opts.action,
+    details: opts.details ?? "",
+    content_type: opts.contentType ?? null,
+    content_id: opts.contentId ?? null,
+    device_name: device,
     browser,
     os,
-    ip,
-    opts.pwaInstalled ? 1 : 0,
-    opts.sessionId ?? null
-  );
-
-  return id;
+    ip_address: ip,
+    pwa_installed: opts.pwaInstalled ?? false,
+    session_id: opts.sessionId ?? null,
+    created_at: new Date().toISOString(),
+  }).then(({ error }) => {
+    if (error) console.error("[activity]", error.message);
+  });
 }
 
-export function getActivityLogs(options: {
+export async function getActivityLogs(options: {
   filter?: string;
   search?: string;
   limit?: number;
   offset?: number;
 }) {
-  const db = getDb();
   const { filter, search, limit = 100, offset = 0 } = options;
 
-  let query = "SELECT * FROM activity_logs WHERE 1=1";
-  const params: (string | number)[] = [];
+  let query = supabaseAdmin.from("activity_logs").select("*");
 
   if (filter && filter !== "all") {
     const filterMap: Record<string, string[]> = {
       uploads: ["upload", "share_upload", "camera_upload", "clipboard_paste"],
       downloads: ["download"],
       notes: ["note_create", "note_edit", "note_delete", "note_copy", "note_duplicate", "note_pin"],
-      images: ["upload"],
-      pdf: ["upload", "preview"],
-      excel: ["upload", "preview"],
-      docs: ["upload", "preview"],
       searches: ["search"],
       auth: ["login", "logout", "lock", "unlock", "password_change"],
       deleted: ["note_delete", "file_delete"],
     };
-
     const actions = filterMap[filter];
-    if (actions) {
-      query += ` AND action IN (${actions.map(() => "?").join(",")})`;
-      params.push(...actions);
-    }
+    if (actions) query = query.in("action", actions);
   }
 
   if (search) {
-    query += " AND (details LIKE ? OR action LIKE ?)";
-    params.push(`%${search}%`, `%${search}%`);
+    query = query.or(`details.ilike.%${search}%,action.ilike.%${search}%`);
   }
 
-  query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
-  return db.prepare(query).all(...params);
+  if (error) return [];
+  return data ?? [];
 }
 
-export function getActivityCount(filter?: string, search?: string): number {
-  const db = getDb();
-  let query = "SELECT COUNT(*) as count FROM activity_logs WHERE 1=1";
-  const params: string[] = [];
+export async function getSessions(limit = 50) {
+  const { data, error } = await supabaseAdmin
+    .from("sessions")
+    .select("*")
+    .order("login_at", { ascending: false })
+    .limit(limit);
 
-  if (search) {
-    query += " AND (details LIKE ? OR action LIKE ?)";
-    params.push(`%${search}%`, `%${search}%`);
-  }
-
-  const result = db.prepare(query).get(...params) as { count: number };
-  return result.count;
-}
-
-export function getSessions(limit = 50) {
-  const db = getDb();
-  return db
-    .prepare("SELECT * FROM sessions ORDER BY login_at DESC LIMIT ?")
-    .all(limit);
+  if (error) return [];
+  return data ?? [];
 }

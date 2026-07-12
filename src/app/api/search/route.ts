@@ -12,7 +12,12 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") ?? "";
   if (!q.trim()) return jsonResponse({ results: [] });
 
-  const notes = searchNotes(q).map((n) => ({
+  const [noteResults, fileResults] = await Promise.all([
+    searchNotes(q),
+    searchFiles(q),
+  ]);
+
+  const notes = noteResults.map((n) => ({
     id: n.id,
     type: "note" as const,
     title: n.title,
@@ -25,7 +30,7 @@ export async function GET(req: NextRequest) {
     matchField: n.title.toLowerCase().includes(q.toLowerCase()) ? "title" : "content",
   }));
 
-  const files = searchFiles(q).map((f) => ({
+  const files = fileResults.map((f) => ({
     id: f.id,
     type: "file" as const,
     title: f.original_name,
@@ -42,12 +47,7 @@ export async function GET(req: NextRequest) {
 
   const results = [...notes, ...files];
 
-  logActivity({
-    action: "search",
-    details: `Searched: "${q}" (${results.length} results)`,
-    sessionId: session!.sessionId,
-    req,
-  });
+  logActivity({ action: "search", details: `Searched: "${q}" (${results.length} results)`, sessionId: session!.sessionId, req });
 
   return jsonResponse({ results, query: q });
 }

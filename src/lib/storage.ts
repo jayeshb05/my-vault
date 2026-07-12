@@ -1,132 +1,168 @@
-import fs from "fs";
-import path from "path";
 import { v4 as uuidv4 } from "uuid";
-import { getDb } from "./db";
+import { supabaseAdmin } from "./supabase";
 import { detectCategory } from "./utils";
 import type { FileCategory, VaultFile } from "./types";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const BUCKET = "vault-files";
 
-export function getUploadsDir() {
-  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  return UPLOADS_DIR;
-}
-
+// ─── Upload ────────────────────────────────────────────────────────────────
 export async function saveFile(
   buffer: Buffer,
   originalName: string,
   mimeType: string
 ): Promise<VaultFile> {
   const id = uuidv4();
-  const ext = path.extname(originalName);
-  const storedName = `${id}${ext}`;
-  const filePath = path.join(getUploadsDir(), storedName);
-
-  fs.writeFileSync(filePath, buffer);
-
+  const ext = originalName.split(".").pop() ?? "bin";
+  const storedName = `${id}.${ext}`;
   const category = detectCategory(mimeType, originalName);
   const now = new Date().toISOString();
 
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO files (id, original_name, stored_name, mime_type, file_size, category, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, originalName, storedName, mimeType, buffer.length, category, now, now);
+  // Upload to Supabase Storage
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .upload(storedName, buffer, { contentType: mimeType, upsert: false });
 
-  return {
-    id,
-    original_name: originalName,
-    stored_name: storedName,
-    mime_type: mimeType,
-    file_size: buffer.length,
-    category,
-    is_favorite: 0,
-    created_at: now,
-    updated_at: now,
-  };
+  if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
+
+  // Save metadata to PostgreSQL
+  const { data, error: dbError } = await supabaseAdmin
+    .from("files")
+    .insert({
+      id,
+      original_name: originalName,
+      stored_name: storedName,
+      mime_type: mimeType,
+      file_size: buffer.length,
+      category,
+      is_favorite: false,
+      created_at: now,
+      updated_at: now,
+    })
+    .select()
+    .single();
+
+  if (dbError) throw new Error(`DB insert failed: ${dbError.message}`);
+  return dbRowToVaultFile(data);
 }
 
-export function getFile(id: string): VaultFile | undefined {
-  const db = getDb();
-  return db.prepare("SELECT * FROM files WHERE id = ?").get(id) as VaultFile | undefined;
+// ─── Read ───────────────────────────────────────────────────────────────────
+export async function getFile(id: string): Promise<VaultFile | undefined> {
+  const { data, error } = await supabaseAdmin
+    .from("files")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return undefined;
+  return dbRowToVaultFile(data);
 }
 
-export function getFilePath(id: string): string | null {
-  const file = getFile(id);
-  if (!file) return null;
-  return path.join(getUploadsDir(), file.stored_name);
-}
-
-export function deleteFile(id: string): boolean {
-  const file = getFile(id);
-  if (!file) return false;
-
-  const filePath = path.join(getUploadsDir(), file.stored_name);
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
-  const db = getDb();
-  db.prepare("DELETE FROM files WHERE id = ?").run(id);
-  return true;
-}
-
-export function renameFile(id: string, newName: string): VaultFile | null {
-  const db = getDb();
-  const file = getFile(id);
+export async function downloadFile(id: string): Promise<Buffer | null> {
+  const file = await getFile(id);
   if (!file) return null;
 
-  db.prepare(
-    `UPDATE files SET original_name = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(newName, id);
+  const { data, error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .download(file.stored_name);
 
-  return { ...file, original_name: newName, updated_at: new Date().toISOString() };
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
 }
 
-export function toggleFileFavorite(id: string): VaultFile | null {
-  const db = getDb();
-  const file = getFile(id);
-  if (!file) return null;
-
-  const newVal = file.is_favorite ? 0 : 1;
-  db.prepare(
-    `UPDATE files SET is_favorite = ?, updated_at = datetime('now') WHERE id = ?`
-  ).run(newVal, id);
-
-  return { ...file, is_favorite: newVal, updated_at: new Date().toISOString() };
-}
-
-export function getAllFiles(filter?: string): VaultFile[] {
-  const db = getDb();
-  let query = "SELECT * FROM files";
-  const params: string[] = [];
+export async function getAllFiles(filter?: string): Promise<VaultFile[]> {
+  let query = supabaseAdmin.from("files").select("*");
 
   if (filter === "favorites") {
-    query += " WHERE is_favorite = 1";
-  } else if (filter && filter !== "all") {
+    query = query.eq("is_favorite", true);
+  } else if (filter && filter !== "all" && filter !== "text") {
     const categoryMap: Record<string, FileCategory[]> = {
       images: ["image"],
       pdf: ["pdf"],
       excel: ["excel"],
       docs: ["word", "doc", "text", "other"],
-      text: ["text"],
     };
     const cats = categoryMap[filter];
-    if (cats) {
-      query += ` WHERE category IN (${cats.map(() => "?").join(",")})`;
-      params.push(...cats);
-    }
+    if (cats) query = query.in("category", cats);
   }
 
-  query += " ORDER BY updated_at DESC";
-  return db.prepare(query).all(...params) as VaultFile[];
+  const { data, error } = await query.order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(dbRowToVaultFile);
 }
 
-export function searchFiles(query: string): VaultFile[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT * FROM files WHERE original_name LIKE ? ORDER BY updated_at DESC LIMIT 50`
-    )
-    .all(`%${query}%`) as VaultFile[];
+export async function searchFiles(q: string): Promise<VaultFile[]> {
+  const { data, error } = await supabaseAdmin
+    .from("files")
+    .select("*")
+    .ilike("original_name", `%${q}%`)
+    .order("updated_at", { ascending: false })
+    .limit(50);
+
+  if (error || !data) return [];
+  return data.map(dbRowToVaultFile);
 }
 
-export { UPLOADS_DIR };
+// ─── Update ─────────────────────────────────────────────────────────────────
+export async function renameFile(id: string, newName: string): Promise<VaultFile | null> {
+  const { data, error } = await supabaseAdmin
+    .from("files")
+    .update({ original_name: newName, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+  return dbRowToVaultFile(data);
+}
+
+export async function toggleFileFavorite(id: string): Promise<VaultFile | null> {
+  const file = await getFile(id);
+  if (!file) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("files")
+    .update({ is_favorite: !file.is_favorite, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error || !data) return null;
+  return dbRowToVaultFile(data);
+}
+
+// ─── Delete ─────────────────────────────────────────────────────────────────
+export async function deleteFile(id: string): Promise<boolean> {
+  const file = await getFile(id);
+  if (!file) return false;
+
+  // Remove from storage
+  await supabaseAdmin.storage.from(BUCKET).remove([file.stored_name]);
+
+  // Remove from DB
+  const { error } = await supabaseAdmin.from("files").delete().eq("id", id);
+  return !error;
+}
+
+// ─── Helper ─────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dbRowToVaultFile(row: any): VaultFile {
+  return {
+    id: row.id,
+    original_name: row.original_name,
+    stored_name: row.stored_name,
+    mime_type: row.mime_type,
+    file_size: row.file_size,
+    category: row.category as FileCategory,
+    is_favorite: row.is_favorite ? 1 : 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// Legacy export — no longer a filesystem path
+export const UPLOADS_DIR = "";
+export const getUploadsDir = () => "";
+export const getFilePath = async (id: string) => {
+  const file = await getFile(id);
+  return file?.stored_name ?? null;
+};

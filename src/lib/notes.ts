@@ -38,6 +38,8 @@ export async function getAllNotes(filter?: string): Promise<Note[]> {
   if (filter === "favorites") {
     query = query.eq("is_favorite", true);
   }
+  // For all other filters (pdf, excel, images, docs) — notes are excluded
+  // by getVaultItems before calling this function
 
   const { data, error } = await query
     .order("is_pinned", { ascending: false })
@@ -119,9 +121,17 @@ export async function deleteNote(id: string): Promise<boolean> {
 
 // ─── Vault items (notes + files combined) ─────────────────────────────────────
 export async function getVaultItems(filter?: string) {
+  // These filters are file-only — don't fetch notes at all
+  const fileOnlyFilters = ["images", "pdf", "excel", "docs"];
+  // These filters are note-only — don't fetch files at all
+  const noteOnlyFilters = ["text"];
+
+  const fetchNotes = !fileOnlyFilters.includes(filter ?? "");
+  const fetchFiles = !noteOnlyFilters.includes(filter ?? "");
+
   const [notes, files] = await Promise.all([
-    getAllNotes(filter),
-    getAllFiles(filter),
+    fetchNotes ? getAllNotes(filter) : Promise.resolve([]),
+    fetchFiles ? getAllFiles(filter) : Promise.resolve([]),
   ]);
 
   const items = [
@@ -150,10 +160,6 @@ export async function getVaultItems(filter?: string) {
       updated_at: f.updated_at,
     })),
   ];
-
-  if (filter === "text") {
-    return items.filter((i) => i.type === "note");
-  }
 
   items.sort((a, b) => {
     if (a.is_pinned && !b.is_pinned) return -1;

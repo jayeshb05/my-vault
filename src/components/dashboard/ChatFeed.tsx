@@ -472,11 +472,21 @@ export default function ChatFeed({
 
   const handleBulkDelete = () => {
     if (selectedItems.length === 0) return;
-    onDelete(selectedItems[0]);
-    if (selectedItems.length > 1) {
-      selectedItems.slice(1).forEach((item) => onDelete(item));
+    // Use onBulkDelete which triggers a single confirm dialog in Dashboard
+    if (onBulkDelete) {
+      onBulkDelete(selectedItems);
     }
     exitMultiSelect();
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === items.length) {
+      // All selected → deselect all
+      setSelectedIds(new Set());
+    } else {
+      // Select all
+      setSelectedIds(new Set(items.map((i) => i.id)));
+    }
   };
 
   useEffect(() => {
@@ -541,6 +551,13 @@ export default function ChatFeed({
           <span className="text-sm text-[var(--text-primary)] flex-1">
             {selectedIds.size} selected
           </span>
+          {/* Select All */}
+          <button
+            onClick={handleSelectAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+          >
+            {selectedIds.size === items.length ? "Deselect All" : "All"}
+          </button>
           <button
             onClick={handleBulkCopy}
             disabled={selectedIds.size === 0}

@@ -153,7 +153,11 @@ function PdfBubble({ item, onCopy, onPreview }: BubbleProps & { onCopy: (item: V
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+      await page.render({
+  canvas: canvas,
+  canvasContext: ctx,
+  viewport,
+} as any).promise;
         if (!cancelled) setThumbnail(canvas.toDataURL("image/jpeg", 0.85));
       } catch {
         // leave thumbnail null — show fallback icon

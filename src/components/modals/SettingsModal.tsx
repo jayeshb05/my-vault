@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Lock, Smartphone, Share, MoreHorizontal, PlusSquare, Chrome } from "lucide-react";
+import { X, Lock, Smartphone, Share, MoreHorizontal, PlusSquare, Globe } from "lucide-react";
 import { useVaultStore } from "@/store/vault-store";
 
 export default function SettingsModal() {
@@ -103,7 +103,7 @@ export default function SettingsModal() {
                 {(isAndroid || (!isIOS && !isAndroid)) && (
                   <div className="p-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border)]">
                     <div className="flex items-center gap-2 mb-2">
-                      <Chrome className="w-4 h-4 text-[var(--accent)]" />
+                      <Globe className="w-4 h-4 text-[var(--accent)]" />
                       <span className="text-sm font-medium text-[var(--text-primary)]">Android (Chrome)</span>
                     </div>
                     <ol className="text-xs text-[var(--text-secondary)] space-y-1.5 list-none">

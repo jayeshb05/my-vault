@@ -80,7 +80,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
             <div className="w-9 h-9 rounded-full bg-[var(--accent)] flex items-center justify-center">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-[var(--text-primary)] hidden sm:block">My Vault</span>
+            <span className="font-semibold text-[var(--text-primary)] hidden sm:block">Lily</span>
           </button>
 
           <div className="flex-1 min-w-0">

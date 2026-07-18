@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My Vault",
-  description: "Private password-protected vault for notes and files",
+  title: "Lily",
+  description: "Lily — private password-protected vault for notes and files",
   manifest: "/manifest.json",
   robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "My Vault",
+    title: "Lily",
     startupImage: "/icons/icon-512.png",
   },
 };
@@ -53,7 +53,7 @@ export default function RootLayout({
         {/* iOS splash — solid green background while loading */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="My Vault" />
+        <meta name="apple-mobile-web-app-title" content="Lily" />
         <meta name="mobile-web-app-capable" content="yes" />
 
         {/* Prevent indexing */}

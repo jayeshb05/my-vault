@@ -1,4 +1,4 @@
-# fly.toml — Fly.io configuration for My Vault
+# fly.toml — Fly.io configuration for Lily
 # Replace "my-vault-app" below with the app name you choose during `fly launch`
 
 app = "my-vault-app"

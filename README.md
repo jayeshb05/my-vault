@@ -1,4 +1,4 @@
-# My Vault
+# Lily
 
 A private, password-protected Progressive Web App (PWA) for personal notes, files, and cross-device access.
 
@@ -42,7 +42,7 @@ Serve behind HTTPS (required for PWA and secure cookies). Example with a reverse
 
 1. Open the site in Chrome (Android or desktop)
 2. Use **Install** / **Add to Home Screen**
-3. On Android, **My Vault** appears in the system Share sheet after install
+3. On Android, **Lily** appears in the system Share sheet after install
 
 ## Keyboard Shortcuts
 

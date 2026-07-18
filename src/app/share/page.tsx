@@ -126,7 +126,7 @@ export default function SharePage() {
         {uploading && (
           <>
             <Loader2 className="w-10 h-10 text-[var(--accent)] animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Saving to My Vault…</h2>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Saving to Lily…</h2>
             <p className="text-sm text-[var(--text-muted)] mt-2">Just a moment</p>
           </>
         )}
@@ -134,7 +134,7 @@ export default function SharePage() {
         {done && (
           <>
             <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Saved to My Vault!</h2>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Saved to Lily!</h2>
             <p className="text-sm text-[var(--text-muted)] mt-2">
               {savedCount > 1 ? `${savedCount} items saved` : "Item saved"} · Redirecting…
             </p>

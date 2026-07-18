@@ -66,7 +66,7 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-[var(--accent)] mb-4 shadow-lg shadow-[var(--accent)]/30">
             <Shield className="w-10 h-10 text-white fill-white" />
           </div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">My Vault</h1>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Lily</h1>
           <p className="text-[var(--text-secondary)]">
             {setupRequired ? "Create your vault password" : "Enter your password to unlock"}
           </p>

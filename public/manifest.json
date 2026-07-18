@@ -1,7 +1,7 @@
 {
-  "name": "My Vault",
-  "short_name": "My Vault",
-  "description": "Private password-protected vault for notes and files",
+  "name": "Lily",
+  "short_name": "Lily",
+  "description": "Lily — private password-protected vault for notes and files",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#008069",

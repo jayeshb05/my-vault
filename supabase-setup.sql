@@ -1,5 +1,5 @@
 -- ============================================================
--- My Vault — Supabase PostgreSQL Setup
+-- Lily — Supabase PostgreSQL Setup
 -- Run this entire script in Supabase SQL Editor once
 -- ============================================================
 

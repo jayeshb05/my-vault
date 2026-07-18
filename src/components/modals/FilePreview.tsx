@@ -28,19 +28,29 @@ export default function FilePreview() {
   // Image gesture state
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
+  const translateRef = useRef({ x: 0, y: 0 });
   const lastPan = useRef({ x: 0, y: 0 });
   const lastDistance = useRef<number | null>(null);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
   const lastTap = useRef(0);
   const lastTapPos = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const isPinching = useRef(false);
 
-  // Swipe-down gesture state
+  // Swipe-down gesture state — shared across whole overlay
+  const overlayRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
+  const touchStartX = useRef(0);
   const touchStartTime = useRef(0);
   const currentDelta = useRef(0);
   const isDragging = useRef(false);
+  const gestureTarget = useRef<"swipe" | "pinch" | "pan" | "none">("none");
+
+  // Keep refs in sync
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { translateRef.current = translate; }, [translate]);
 
   // Back button support
   useEffect(() => {
@@ -49,11 +59,18 @@ export default function FilePreview() {
     const handlePopState = () => triggerClose();
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showFilePreview]);
 
-  // Reset closing state when modal opens
+  // Reset state when modal opens
   useEffect(() => {
-    if (showFilePreview) setClosing(false);
+    if (showFilePreview) {
+      setClosing(false);
+      setScale(1);
+      setTranslate({ x: 0, y: 0 });
+      scaleRef.current = 1;
+      translateRef.current = { x: 0, y: 0 };
+    }
   }, [showFilePreview]);
 
   if (!showFilePreview || !selectedItem || selectedItem.type !== "file") return null;
@@ -61,6 +78,7 @@ export default function FilePreview() {
   const { id, title, category, mime_type, file_size, created_at } = selectedItem;
   const previewUrl = `/api/files/download?id=${id}&action=preview`;
   const downloadUrl = `/api/files/download?id=${id}&action=download`;
+  const isImage = category === "image" || mime_type?.startsWith("image/");
 
   const formatPreviewMeta = (value?: string) => {
     if (!value) return "";
@@ -86,7 +104,6 @@ export default function FilePreview() {
           sheet.style.transform = "";
           sheet.style.transition = "";
         }
-        // reset image transform
         setScale(1);
         setTranslate({ x: 0, y: 0 });
       }, 280);
@@ -122,134 +139,193 @@ export default function FilePreview() {
     setTimeout(() => setCopying(false), 1400);
   };
 
-  // ── Swipe-down gesture ──────────────────────────────────────────────────
+  // ── Unified touch gesture handlers (attached to entire overlay) ──────────
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
+    const touches = e.touches;
     touchStartTime.current = Date.now();
     currentDelta.current = 0;
     isDragging.current = false;
+    gestureTarget.current = "none";
 
-    if (e.touches.length === 2) {
-      // start pinch
-      const t0 = e.touches[0];
-      const t1 = e.touches[1];
+    if (touches.length === 2) {
+      // Start pinch — always on image
+      isPinching.current = true;
+      gestureTarget.current = "pinch";
+      const t0 = touches[0];
+      const t1 = touches[1];
       const dx = t1.clientX - t0.clientX;
       const dy = t1.clientY - t0.clientY;
       lastDistance.current = Math.hypot(dx, dy);
-      lastCenter.current = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
-    } else {
+      lastCenter.current = {
+        x: (t0.clientX + t1.clientX) / 2,
+        y: (t0.clientY + t1.clientY) / 2,
+      };
+      // Stop sheet dragging when pinching
+      const sheet = sheetRef.current;
+      if (sheet) sheet.style.transition = "none";
+    } else if (touches.length === 1) {
+      isPinching.current = false;
       lastDistance.current = null;
       lastCenter.current = null;
-      // store last tap position for potential double-tap
-      const t = e.touches[0];
-      lastTapPos.current = { x: t.clientX, y: t.clientY };
-    }
+      touchStartY.current = touches[0].clientY;
+      touchStartX.current = touches[0].clientX;
+      lastTapPos.current = { x: touches[0].clientX, y: touches[0].clientY };
+      lastPan.current = { x: touches[0].clientX, y: touches[0].clientY };
 
-    const sheet = sheetRef.current;
-    if (sheet) {
-      sheet.style.transition = "none";
+      const sheet = sheetRef.current;
+      if (sheet) sheet.style.transition = "none";
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // If two fingers — pinch-to-zoom
-    if (e.touches.length === 2) {
-      const t0 = e.touches[0];
-      const t1 = e.touches[1];
+    const touches = e.touches;
+
+    if (touches.length === 2 && isImage) {
+      // Pinch-to-zoom
+      e.stopPropagation();
+      const t0 = touches[0];
+      const t1 = touches[1];
       const dx = t1.clientX - t0.clientX;
       const dy = t1.clientY - t0.clientY;
       const dist = Math.hypot(dx, dy);
+      const center = {
+        x: (t0.clientX + t1.clientX) / 2,
+        y: (t0.clientY + t1.clientY) / 2,
+      };
+
       if (lastDistance.current && lastCenter.current) {
         const deltaScale = dist / lastDistance.current;
-        const nextScale = Math.max(1, Math.min(5, scale * deltaScale));
-        // compute movement to keep center stable
-        const center = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+        const cur = scaleRef.current;
+        const nextScale = Math.max(1, Math.min(5, cur * deltaScale));
         const dxCenter = center.x - lastCenter.current.x;
         const dyCenter = center.y - lastCenter.current.y;
+        scaleRef.current = nextScale;
+        translateRef.current = {
+          x: translateRef.current.x + dxCenter,
+          y: translateRef.current.y + dyCenter,
+        };
         setScale(nextScale);
-        setTranslate((prev) => ({ x: prev.x + dxCenter, y: prev.y + dyCenter }));
-        lastDistance.current = dist;
-        lastCenter.current = center;
-      } else {
-        lastDistance.current = dist;
-        lastCenter.current = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+        setTranslate({ ...translateRef.current });
       }
+      lastDistance.current = dist;
+      lastCenter.current = center;
+      gestureTarget.current = "pinch";
       return;
     }
 
-    // Single finger — if zoomed, pan image; otherwise treat as sheet drag
-    if (e.touches.length === 1 && scale > 1) {
-      const t = e.touches[0];
-      const dx = t.clientX - (lastPan.current.x || t.clientX);
-      const dy = t.clientY - (lastPan.current.y || t.clientY);
+    if (touches.length === 1) {
+      const t = touches[0];
+      const dy = t.clientY - touchStartY.current;
+      const dx = t.clientX - touchStartX.current;
+
+      // If zoomed in and image, pan image
+      if (isImage && scaleRef.current > 1 && gestureTarget.current !== "swipe") {
+        const pdx = t.clientX - lastPan.current.x;
+        const pdy = t.clientY - lastPan.current.y;
+        lastPan.current = { x: t.clientX, y: t.clientY };
+        translateRef.current = {
+          x: translateRef.current.x + pdx,
+          y: translateRef.current.y + pdy,
+        };
+        setTranslate({ ...translateRef.current });
+        gestureTarget.current = "pan";
+        return;
+      }
+
+      // Determine gesture type early
+      if (gestureTarget.current === "none") {
+        if (Math.abs(dy) > 8 && dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+          gestureTarget.current = "swipe";
+        } else if (Math.abs(dx) > 8 || (dy < 0)) {
+          gestureTarget.current = "none"; // not a downward swipe
+          return;
+        }
+      }
+
+      if (gestureTarget.current === "swipe") {
+        const delta = Math.max(0, dy);
+        currentDelta.current = delta;
+        isDragging.current = true;
+        const sheet = sheetRef.current;
+        if (sheet) {
+          const resistance = delta > 150 ? 150 + (delta - 150) * 0.4 : delta;
+          sheet.style.transform = `translateY(${resistance}px)`;
+        }
+      }
+
       lastPan.current = { x: t.clientX, y: t.clientY };
-      setTranslate((p) => ({ x: p.x + dx, y: p.y + dy }));
-      return;
-    }
-
-    const delta = e.touches[0].clientY - touchStartY.current;
-    if (delta < 0) return; // only allow downward drag when not zooming
-
-    currentDelta.current = delta;
-    isDragging.current = true;
-
-    const sheet = sheetRef.current;
-    if (sheet) {
-      const resistance = delta > 150 ? 150 + (delta - 150) * 0.4 : delta;
-      sheet.style.transform = `translateY(${resistance}px)`;
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
     const sheet = sheetRef.current;
 
-    // Reset lastPan for next gesture
-    lastPan.current = { x: 0, y: 0 };
-
-    // If we were pinching, just clear pinch state
-    if (lastDistance.current) {
+    // Finished pinching
+    if (gestureTarget.current === "pinch") {
       lastDistance.current = null;
       lastCenter.current = null;
+      isPinching.current = false;
+      gestureTarget.current = "none";
       return;
     }
 
-    if (!isDragging.current) {
-      // detect double tap to zoom (focus on tap position)
-      const now = Date.now();
-      const prev = lastTap.current;
-      const tapPos = lastTapPos.current;
-      if (now - prev < 300 && tapPos) {
-        const img = imgRef.current;
-        const newScale = scale > 1 ? 1 : 2;
-        if (img) {
-          const rect = img.getBoundingClientRect();
-          const cx = rect.left + rect.width / 2;
-          const cy = rect.top + rect.height / 2;
-          const px = tapPos.x - cx;
-          const py = tapPos.y - cy;
-          const tx = translate.x + (scale - newScale) * px;
-          const ty = translate.y + (scale - newScale) * py;
-          setScale(newScale);
-          if (newScale === 1) {
-            setTranslate({ x: 0, y: 0 });
+    // Finished panning (zoomed image)
+    if (gestureTarget.current === "pan") {
+      gestureTarget.current = "none";
+      return;
+    }
+
+    if (!isDragging.current && gestureTarget.current !== "swipe") {
+      // Detect double-tap to zoom (image only)
+      if (isImage) {
+        const now = Date.now();
+        const prev = lastTap.current;
+        const tapPos = lastTapPos.current;
+        if (now - prev < 300 && tapPos) {
+          const img = imgRef.current;
+          const curScale = scaleRef.current;
+          const newScale = curScale > 1 ? 1 : 2.5;
+          if (img) {
+            const rect = img.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const px = tapPos.x - cx;
+            const py = tapPos.y - cy;
+            const tx = translateRef.current.x + (curScale - newScale) * px / curScale;
+            const ty = translateRef.current.y + (curScale - newScale) * py / curScale;
+            if (newScale === 1) {
+              setScale(1);
+              setTranslate({ x: 0, y: 0 });
+              scaleRef.current = 1;
+              translateRef.current = { x: 0, y: 0 };
+            } else {
+              setScale(newScale);
+              setTranslate({ x: tx, y: ty });
+              scaleRef.current = newScale;
+              translateRef.current = { x: tx, y: ty };
+            }
           } else {
-            setTranslate({ x: tx, y: ty });
+            const newS = scaleRef.current > 1 ? 1 : 2.5;
+            setScale(newS);
+            if (newS === 1) { setTranslate({ x: 0, y: 0 }); scaleRef.current = 1; translateRef.current = { x: 0, y: 0 }; }
           }
-        } else {
-          setScale(newScale);
-          if (newScale === 1) setTranslate({ x: 0, y: 0 });
+          lastTap.current = 0; // reset so triple-tap doesn't re-trigger
+          gestureTarget.current = "none";
+          return;
         }
+        lastTap.current = now;
+        lastTapPos.current = null;
       }
-      lastTap.current = now;
-      lastTapPos.current = null;
+      gestureTarget.current = "none";
       return;
     }
 
+    // Swipe-down: decide to close or spring back
     const delta = currentDelta.current;
     const elapsed = Date.now() - touchStartTime.current;
-    const velocity = delta / elapsed; // px/ms
-
-    const shouldClose = delta > 120 || velocity > 0.5;
+    const velocity = delta / Math.max(elapsed, 1);
+    const shouldClose = delta > 100 || velocity > 0.45;
 
     if (shouldClose) {
       triggerClose();
@@ -264,13 +340,14 @@ export default function FilePreview() {
     }
 
     isDragging.current = false;
+    gestureTarget.current = "none";
   };
-  // ────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   const renderPreview = () => {
-    if (category === "image" || mime_type?.startsWith("image/")) {
+    if (isImage) {
       return (
-        <div className="relative w-full h-full flex items-center justify-center">
+        <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
           <img
             ref={imgRef}
             src={previewUrl}
@@ -278,14 +355,21 @@ export default function FilePreview() {
             draggable={false}
             style={{
               transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-              transition: lastDistance.current ? "none" : "transform 0.08s",
+              transition: isPinching.current ? "none" : "transform 0.1s ease-out",
               touchAction: "none",
               maxWidth: "100%",
               maxHeight: "100%",
               objectFit: "contain",
+              willChange: "transform",
+              userSelect: "none",
             }}
           />
-          <div className="absolute bottom-3 left-3 right-3 rounded-2xl bg-black/55 px-3 py-2 backdrop-blur-sm">
+          {scale > 1 && (
+            <div className="absolute top-3 right-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+              {Math.round(scale * 100)}%
+            </div>
+          )}
+          <div className="absolute bottom-3 left-3 right-3 rounded-2xl bg-black/55 px-3 py-2 backdrop-blur-sm pointer-events-none">
             <p className="text-sm font-medium text-white truncate">{title}</p>
             <p className="text-xs text-white/80">{previewMeta}</p>
           </div>
@@ -320,21 +404,26 @@ export default function FilePreview() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ touchAction: "none" }}
+    >
+      {/* Backdrop — clicking closes, touch swipe handled by overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={handleClose}
       />
 
       {/* Sheet */}
-        <div
+      <div
         ref={sheetRef}
         className="relative w-full sm:max-w-3xl h-screen sm:h-[88dvh] bg-[var(--bg-card)] rounded-none sm:rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col animate-slide-up"
-        style={{ willChange: "transform", touchAction: "none" }}
-        onTouchStartCapture={handleTouchStart}
-        onTouchMoveCapture={handleTouchMove}
-        onTouchEndCapture={handleTouchEnd}
+        style={{ willChange: "transform" }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)] sm:hidden" />
@@ -371,8 +460,8 @@ export default function FilePreview() {
           </div>
         </div>
 
-        {/* Preview area — allow internal scroll only when not at top */}
-        <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0" onTouchStartCapture={handleTouchStart} onTouchMoveCapture={handleTouchMove} onTouchEndCapture={handleTouchEnd}>
+        {/* Preview area */}
+        <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0" style={{ touchAction: isImage ? "none" : "auto" }}>
           {renderPreview()}
         </div>
       </div>

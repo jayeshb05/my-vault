@@ -14,6 +14,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchVal, setSearchVal] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -31,6 +32,25 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [setShowActivityCenter]);
+
+  // Close search on click/touch outside
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
+        closeSearch();
+      }
+    };
+    // Use capture so we catch it before other handlers
+    document.addEventListener("mousedown", handleOutside, true);
+    document.addEventListener("touchstart", handleOutside, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside, true);
+      document.removeEventListener("touchstart", handleOutside, true);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchOpen]);
 
   const openSearch = () => {
     setSearchOpen(true);
@@ -87,7 +107,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
           )}
 
           {/* Search */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" ref={searchContainerRef}>
             {searchOpen ? (
               <div className="flex items-center gap-1.5">
                 <div className="relative flex-1">

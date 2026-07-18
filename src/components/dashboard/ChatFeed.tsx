@@ -427,7 +427,7 @@ export default function ChatFeed({
     if (!groups[group]) groups[group] = [];
     groups[group].push(item);
   });
-  const groupOrder = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "Older"];
+  const groupOrder = ["Older", "Last 30 Days", "Last 7 Days", "Yesterday", "Today"];
 
   const renderBubble = (item: VaultItem) => {
     if (item.type === "note") return <TextBubble item={item} />;

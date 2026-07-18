@@ -485,44 +485,7 @@ export default function SettingsModal() {
             </div>
           </div>
 
-          {/* Backup & Restore */}
-          <div className="px-5 pt-4 pb-6">
-            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">Backup &amp; Restore</p>
-            <div className="rounded-2xl bg-[var(--bg-input)] overflow-hidden divide-y divide-[var(--border)]/40">
-              <button
-                onClick={handleBackup}
-                disabled={backupLoading}
-                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press text-left disabled:opacity-60"
-              >
-                <div className="flex items-center gap-3">
-                  <Download style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {backupLoading ? "Creating backup…" : "Export Backup"}
-                  </span>
-                </div>
-                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
-              </button>
-              <label className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <Upload style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {restoreLoading ? "Restoring…" : "Restore Backup"}
-                  </span>
-                </div>
-                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
-                <input
-                  type="file"
-                  accept=".zip"
-                  className="hidden"
-                  onChange={handleRestore}
-                  disabled={restoreLoading}
-                />
-              </label>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-2 px-1">
-              Backup exports all notes and file metadata. Files are stored in Supabase Storage and remain accessible.
-            </p>
-          </div>
+
         </div>
       </div>
     </div>

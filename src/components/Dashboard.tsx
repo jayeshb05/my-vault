@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useState, useRef } from "react";
 import { useVaultStore } from "@/store/vault-store";
 import Header from "@/components/dashboard/Header";
-import FilterTabs from "@/components/dashboard/FilterTabs";
+import FilterTabs, { clientFilter } from "@/components/dashboard/FilterTabs";
 import ChatFeed from "@/components/dashboard/ChatFeed";
 import BottomComposeBar, { type Attachment } from "@/components/dashboard/BottomComposeBar";
 import ActivityCenter from "@/components/modals/ActivityCenter";
@@ -24,6 +24,7 @@ interface PendingDelete {
 export default function Dashboard({ onLock }: DashboardProps) {
   const {
     items,
+    filter,
     searchResults,
     isSearching,
     isLoading,
@@ -258,7 +259,8 @@ export default function Dashboard({ onLock }: DashboardProps) {
     }
   };
 
-  const displayItems = isSearching ? searchResults : items;
+  // Apply client-side filter instantly; API refresh provides fresh server data
+  const displayItems = isSearching ? searchResults : clientFilter(items, filter);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

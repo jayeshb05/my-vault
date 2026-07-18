@@ -2,7 +2,7 @@
 
 import { useVaultStore } from "@/store/vault-store";
 import { cn } from "@/lib/utils";
-import type { FilterTab } from "@/lib/types";
+import type { FilterTab, VaultItem } from "@/lib/types";
 import { FileText, Image, File, FileSpreadsheet, Star, LayoutGrid } from "lucide-react";
 
 const TABS: { id: FilterTab; label: string; icon: React.ElementType }[] = [
@@ -15,14 +15,30 @@ const TABS: { id: FilterTab; label: string; icon: React.ElementType }[] = [
   { id: "favorites", label: "Starred",   icon: Star },
 ];
 
+/** Client-side filter — runs instantly without waiting for the API */
+export function clientFilter(items: VaultItem[], tab: FilterTab): VaultItem[] {
+  if (tab === "all") return items;
+  if (tab === "favorites") return items.filter((i) => i.is_favorite);
+  if (tab === "text") return items.filter((i) => i.type === "note");
+  if (tab === "images") return items.filter((i) => i.category === "image");
+  if (tab === "pdf") return items.filter((i) => i.category === "pdf");
+  if (tab === "excel") return items.filter((i) => i.category === "excel");
+  if (tab === "docs") return items.filter((i) =>
+    i.type === "note" ||
+    ["word", "doc", "text", "other"].includes(i.category ?? "")
+  );
+  return items;
+}
+
 export default function FilterTabs() {
   const { filter, setFilter, refreshItems } = useVaultStore();
 
   const handleFilter = (tab: FilterTab) => {
     if (tab === filter) return;
+    // Set filter immediately — client-side filtering kicks in at once
     setFilter(tab);
-    // Use requestAnimationFrame for instant feel — refresh after paint
-    requestAnimationFrame(() => refreshItems());
+    // Kick off background API refresh for any server-side filtered data
+    refreshItems();
   };
 
   return (

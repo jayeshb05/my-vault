@@ -221,8 +221,16 @@ function AccessLogModal({ onClose }: { onClose: () => void }) {
 // ── Main Settings Modal ──────────────────────────────────────────────────────
 export default function SettingsModal() {
   const { showSettings, setShowSettings, theme, setTheme } = useVaultStore();
-  const [autoLock, setAutoLock] = useState(2);
-  const [sliderValue, setSliderValue] = useState(2);
+  const [autoLock, setAutoLock] = useState(() => {
+    if (typeof window === "undefined") return 2;
+    const saved = Number(localStorage.getItem("vault-auto-lock-minutes"));
+    return Number.isFinite(saved) && saved > 0 ? saved : 2;
+  });
+  const [sliderValue, setSliderValue] = useState(() => {
+    if (typeof window === "undefined") return 2;
+    const saved = Number(localStorage.getItem("vault-auto-lock-minutes"));
+    return Number.isFinite(saved) && saved > 0 ? saved : 2;
+  });
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -233,6 +241,14 @@ export default function SettingsModal() {
 
   useEffect(() => {
     if (showSettings) {
+      const savedValue = typeof window !== "undefined"
+        ? Number(localStorage.getItem("vault-auto-lock-minutes"))
+        : NaN;
+      if (Number.isFinite(savedValue) && savedValue > 0) {
+        setAutoLock(savedValue);
+        setSliderValue(savedValue);
+      }
+
       fetch("/api/settings")
         .then((r) => r.json())
         .then((data) => {
@@ -240,6 +256,7 @@ export default function SettingsModal() {
             const val = data.settings.auto_lock_minutes ?? 2;
             setAutoLock(val);
             setSliderValue(val);
+            if (typeof window !== "undefined") localStorage.setItem("vault-auto-lock-minutes", String(val));
           }
         });
     } else {
@@ -256,6 +273,8 @@ export default function SettingsModal() {
         body: JSON.stringify({ auto_lock_minutes: minutes }),
       });
       setAutoLock(minutes);
+      setSliderValue(minutes);
+      if (typeof window !== "undefined") localStorage.setItem("vault-auto-lock-minutes", String(minutes));
       window.dispatchEvent(new CustomEvent("autolock-changed", { detail: { minutes } }));
     } finally {
       setSavingLock(false);

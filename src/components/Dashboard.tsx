@@ -44,7 +44,14 @@ export default function Dashboard({ onLock }: DashboardProps) {
 
   // ── Auto-lock on inactivity ──────────────────────────────────────────────
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoLockMinutesRef = useRef<number>(2);
+  const autoLockMinutesRef = useRef<number>(
+    typeof window !== "undefined"
+      ? (() => {
+          const saved = Number(localStorage.getItem("vault-auto-lock-minutes"));
+          return Number.isFinite(saved) && saved > 0 ? saved : 2;
+        })()
+      : 2
+  );
 
   const resetLockTimer = useCallback(() => {
     if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
@@ -56,13 +63,23 @@ export default function Dashboard({ onLock }: DashboardProps) {
 
   // Load auto-lock setting and start the timer
   useEffect(() => {
+    const applySavedSetting = (minutes: number) => {
+      autoLockMinutesRef.current = minutes;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("vault-auto-lock-minutes", String(minutes));
+      }
+      resetLockTimer();
+    };
+
     fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => {
-        if (data.settings?.auto_lock_minutes) {
-          autoLockMinutesRef.current = data.settings.auto_lock_minutes;
+        const serverMinutes = Number(data.settings?.auto_lock_minutes);
+        if (Number.isFinite(serverMinutes) && serverMinutes > 0) {
+          applySavedSetting(serverMinutes);
+        } else {
+          resetLockTimer();
         }
-        resetLockTimer();
       })
       .catch(() => resetLockTimer());
   }, [resetLockTimer]);

@@ -19,91 +19,15 @@ const REDIRECT_DELAY = 800;
 export default function SharePage() {
   const router = useRouter();
 
-  // Check cached auth instantly so we skip the spinner if already logged in
   const [authenticated, setAuthenticated] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    return localStorage.getItem("vault-authed") === "1";
+    return sessionStorage.getItem("vault-auth-session") === "1";
   });
-  const [checking, setChecking] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
   const [error, setError] = useState("");
   const [shareMeta, setShareMeta] = useState<ShareMeta | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    // Case 1: Redirected back after a POST file share (/api/share → /share?done=1)
-    if (params.has("done")) {
-      const total = parseInt(params.get("total") || "1");
-      const filesSaved = parseInt(params.get("files_saved") || "0");
-      setSavedCount(total);
-      setShareMeta({ title: null, text: null, url: null, fileCount: filesSaved, fileNames: [] });
-
-      // Validate auth then redirect
-      fetch("/api/auth/status")
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.authenticated) {
-            localStorage.setItem("vault-authed", "1");
-            setAuthenticated(true);
-            setDone(true);
-            setTimeout(() => router.push("/"), REDIRECT_DELAY);
-          } else {
-            localStorage.removeItem("vault-authed");
-            setAuthenticated(false);
-          }
-        })
-        .catch(() => {})
-        .finally(() => setChecking(false));
-      return;
-    }
-
-    if (params.has("error")) {
-      setError("Something went wrong saving the shared content.");
-      setChecking(false);
-      return;
-    }
-
-    // Case 2: Text/URL share via GET params
-    const meta: ShareMeta = {
-      title: params.get("title"),
-      text: params.get("text"),
-      url: params.get("url"),
-      fileCount: 0,
-      fileNames: [],
-    };
-
-    const hasText = meta.title || meta.text || meta.url;
-    if (hasText) {
-      sessionStorage.setItem("share_data", JSON.stringify(meta));
-    }
-    setShareMeta(meta);
-
-    // If cached auth, start processing immediately — validate in parallel
-    const cachedAuth = localStorage.getItem("vault-authed") === "1";
-    if (cachedAuth) {
-      setChecking(false);
-      processTextShare(meta);
-    }
-
-    fetch("/api/auth/status")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.authenticated) {
-          localStorage.setItem("vault-authed", "1");
-          setAuthenticated(true);
-          // Only kick off processing if we weren't already doing it via cache
-          if (!cachedAuth) processTextShare(meta);
-        } else {
-          localStorage.removeItem("vault-authed");
-          setAuthenticated(false);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setChecking(false));
-  }, []);
 
   const processTextShare = async (meta: ShareMeta) => {
     const content = [meta.title, meta.text, meta.url].filter(Boolean).join("\n");
@@ -131,22 +55,61 @@ export default function SharePage() {
     }
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.has("done")) {
+      const total = parseInt(params.get("total") || "1");
+      const filesSaved = parseInt(params.get("files_saved") || "0");
+      setSavedCount(total);
+      setShareMeta({ title: null, text: null, url: null, fileCount: filesSaved, fileNames: [] });
+      setAuthenticated(sessionStorage.getItem("vault-auth-session") === "1");
+      if (sessionStorage.getItem("vault-auth-session") === "1") {
+        setDone(true);
+        setTimeout(() => router.push("/"), REDIRECT_DELAY);
+      }
+      return;
+    }
+
+    if (params.has("error")) {
+      setError("Something went wrong saving the shared content.");
+      return;
+    }
+
+    const meta: ShareMeta = {
+      title: params.get("title"),
+      text: params.get("text"),
+      url: params.get("url"),
+      fileCount: 0,
+      fileNames: [],
+    };
+
+    const hasText = meta.title || meta.text || meta.url;
+    if (hasText) {
+      sessionStorage.setItem("share_data", JSON.stringify(meta));
+    }
+    setShareMeta(meta);
+
+    if (sessionStorage.getItem("vault-auth-session") === "1") {
+      setAuthenticated(true);
+      processTextShare(meta);
+    }
+
+    const handleBeforeUnload = () => {
+      sessionStorage.removeItem("vault-auth-session");
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [router]);
+
   const handleAuth = () => {
-    localStorage.setItem("vault-authed", "1");
+    sessionStorage.setItem("vault-auth-session", "1");
     setAuthenticated(true);
     const stored = sessionStorage.getItem("share_data");
     const meta = stored ? JSON.parse(stored) : shareMeta;
     processTextShare(meta || { title: null, text: null, url: null, fileCount: 0, fileNames: [] });
   };
-
-  // Only show spinner if we have no cached session AND are still checking
-  if (checking && !authenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-        <Loader2 className="w-8 h-8 text-[var(--accent)] animate-spin" />
-      </div>
-    );
-  }
 
   if (!authenticated) {
     return <LoginScreen onSuccess={handleAuth} />;

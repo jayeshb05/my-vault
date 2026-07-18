@@ -206,10 +206,10 @@ export default function FilePreview() {
       <div
         ref={sheetRef}
         className="relative w-full sm:max-w-3xl h-[92dvh] sm:h-[88dvh] bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col animate-slide-up"
-        style={{ willChange: "transform", touchAction: "none" }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        style={{ willChange: "transform", touchAction: "pan-y" }}
+        onTouchStartCapture={handleTouchStart}
+        onTouchMoveCapture={handleTouchMove}
+        onTouchEndCapture={handleTouchEnd}
       >
         {/* Drag handle */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)] sm:hidden" />

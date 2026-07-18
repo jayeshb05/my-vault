@@ -250,7 +250,6 @@ export default function FilePreview() {
               maxHeight: "100%",
               objectFit: "contain",
             }}
-            onTouchStart={(e) => e.stopPropagation()}
           />
         </div>
       );
@@ -291,10 +290,10 @@ export default function FilePreview() {
       />
 
       {/* Sheet */}
-      <div
+        <div
         ref={sheetRef}
-        className="relative w-full sm:max-w-3xl h-[92dvh] sm:h-[88dvh] bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col animate-slide-up"
-        style={{ willChange: "transform", touchAction: "pan-y" }}
+        className="relative w-full sm:max-w-3xl h-screen sm:h-[88dvh] bg-[var(--bg-card)] rounded-none sm:rounded-2xl border border-[var(--border)] shadow-2xl flex flex-col animate-slide-up"
+        style={{ willChange: "transform", touchAction: "none" }}
         onTouchStartCapture={handleTouchStart}
         onTouchMoveCapture={handleTouchMove}
         onTouchEndCapture={handleTouchEnd}
@@ -335,7 +334,7 @@ export default function FilePreview() {
         </div>
 
         {/* Preview area — allow internal scroll only when not at top */}
-        <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0">
+        <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0" onTouchStartCapture={handleTouchStart} onTouchMoveCapture={handleTouchMove} onTouchEndCapture={handleTouchEnd}>
           {renderPreview()}
         </div>
       </div>

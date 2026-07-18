@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, Send, X, Paperclip } from "lucide-react";
+import { Paperclip, Plus, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Attachment {
@@ -47,15 +47,12 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
     setError("");
     attachments.forEach((a) => a.preview && URL.revokeObjectURL(a.preview));
     setAttachments([]);
-    if (inputRef.current) {
-      inputRef.current.style.height = "42px";
-    }
+    if (inputRef.current) inputRef.current.style.height = "42px";
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-
     const files: File[] = [];
     for (const item of Array.from(items)) {
       if (item.kind === "file") {
@@ -63,7 +60,6 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
         if (file) files.push(file);
       }
     }
-
     if (files.length > 0) {
       e.preventDefault();
       addFiles(files);
@@ -73,7 +69,6 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
   const handleSend = async () => {
     if (sending) return;
     if (!text.trim() && attachments.length === 0) return;
-
     setSending(true);
     setError("");
     try {
@@ -81,10 +76,10 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
       if (success) {
         resetInput();
       } else {
-        setError("Failed to send. Please unlock and try again.");
+        setError("Failed. Please unlock and try again.");
       }
     } catch {
-      setError("Failed to send. Please try again.");
+      setError("Failed. Please try again.");
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -101,58 +96,66 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
   const canSend = text.trim().length > 0 || attachments.length > 0;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)]/70 bg-[var(--compose-bg)]/90 backdrop-blur-2xl safe-bottom shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
+    <div className="fixed bottom-0 left-0 right-0 z-40 compose-bar safe-bottom">
+      {/* Error */}
       {error && (
-        <p className="text-center text-xs text-red-500 py-1 px-3">{error}</p>
+        <p className="text-center text-xs text-red-500 py-1.5 px-3 bg-red-500/8">{error}</p>
       )}
 
+      {/* Attachment previews */}
       {attachments.length > 0 && (
-        <div className="flex gap-2 px-3 pt-2 overflow-x-auto scrollbar-hide max-w-3xl mx-auto">
+        <div className="flex gap-2 px-3 pt-2.5 overflow-x-auto scrollbar-hide max-w-3xl mx-auto">
           {attachments.map((att) => (
-            <div key={att.id} className="relative shrink-0">
+            <div key={att.id} className="relative shrink-0 animate-scale-in">
               {att.preview ? (
-                <img src={att.preview} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                <img
+                  src={att.preview}
+                  alt=""
+                  className="w-16 h-16 object-cover rounded-xl border border-[var(--border)]"
+                />
               ) : (
-                <div className="w-16 h-16 rounded-lg bg-[var(--bg-hover)] flex flex-col items-center justify-center p-1">
-                  <Paperclip className="w-4 h-4 text-[var(--text-muted)]" />
-                  <span className="text-[9px] text-[var(--text-muted)] truncate w-full text-center mt-1">
-                    {att.file.name.split(".").pop()}
+                <div className="w-16 h-16 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] flex flex-col items-center justify-center p-1.5 gap-1">
+                  <Paperclip style={{ width: 14, height: 14 }} className="text-[var(--text-muted)]" />
+                  <span className="text-[9px] text-[var(--text-muted)] truncate w-full text-center font-medium">
+                    {att.file.name.split(".").pop()?.toUpperCase()}
                   </span>
                 </div>
               )}
               <button
                 onClick={() => removeAttachment(att.id)}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm btn-press"
               >
-                <X className="w-3 h-3" />
+                <X style={{ width: 11, height: 11 }} />
               </button>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex items-end gap-2 px-3 py-2 max-w-3xl mx-auto">
-        {/* Input bar with + inside on the left */}
-        <div className="flex-1 flex items-end rounded-[20px] border border-[var(--border)] bg-[var(--compose-input)]/90 min-h-[42px] shadow-sm">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="pl-3 pr-1 py-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0 self-end"
-            title="Attach file"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
+      {/* Input row */}
+      <div className="flex items-end gap-2 px-3 py-2.5 max-w-3xl mx-auto">
+        {/* Attach button */}
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="w-10 h-10 rounded-full bg-[var(--bg-input)] border border-[var(--border)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 transition-all shrink-0 mb-0.5 btn-press"
+          title="Attach file"
+        >
+          <Plus style={{ width: 18, height: 18 }} />
+        </button>
 
+        {/* Text input */}
+        <div className="flex-1 rounded-[20px] border border-[var(--border)] bg-[var(--compose-input)] shadow-sm focus-within:border-[var(--accent)]/50 focus-within:shadow-[0_0_0_3px_var(--input-focus-ring)] transition-all duration-200">
           <textarea
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            placeholder="Type or paste anything..."
+            placeholder="Type or paste anything…"
             rows={1}
             className={cn(
-              "flex-1 resize-none bg-transparent py-2.5 pr-3 text-sm",
+              "w-full resize-none bg-transparent px-4 py-2.5 text-sm",
               "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
               "focus:outline-none max-h-32 overflow-y-auto leading-relaxed"
             )}
@@ -165,20 +168,22 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
           />
         </div>
 
+        {/* Send button */}
         <button
           type="button"
           onClick={handleSend}
           disabled={sending || !canSend}
           className={cn(
-            "p-2.5 rounded-full shrink-0 mb-0.5 transition-all shadow-sm",
+            "w-10 h-10 rounded-full shrink-0 mb-0.5 flex items-center justify-center transition-all duration-200",
             canSend
-              ? "bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] text-white"
-              : "text-[var(--text-muted)] opacity-50",
+              ? "gradient-accent text-white fab"
+              : "bg-[var(--bg-input)] text-[var(--text-muted)] opacity-50 border border-[var(--border)]",
             sending && "opacity-70"
           )}
           title="Send"
         >
-          <Send className="w-5 h-5" />
+          <Send style={{ width: sending ? 15 : 17, height: sending ? 15 : 17 }}
+            className={sending ? "animate-pulse" : ""} />
         </button>
 
         <input

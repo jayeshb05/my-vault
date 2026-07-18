@@ -58,9 +58,18 @@ export default function FilePreview() {
 
   if (!showFilePreview || !selectedItem || selectedItem.type !== "file") return null;
 
-  const { id, title, category, mime_type, file_size } = selectedItem;
+  const { id, title, category, mime_type, file_size, created_at } = selectedItem;
   const previewUrl = `/api/files/download?id=${id}&action=preview`;
   const downloadUrl = `/api/files/download?id=${id}&action=download`;
+
+  const formatPreviewMeta = (value?: string) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "long" })} • ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  };
+
+  const previewMeta = formatPreviewMeta(created_at);
 
   // Animate sheet down then close
   const triggerClose = () => {
@@ -261,7 +270,7 @@ export default function FilePreview() {
   const renderPreview = () => {
     if (category === "image" || mime_type?.startsWith("image/")) {
       return (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="relative w-full h-full flex items-center justify-center">
           <img
             ref={imgRef}
             src={previewUrl}
@@ -276,6 +285,10 @@ export default function FilePreview() {
               objectFit: "contain",
             }}
           />
+          <div className="absolute bottom-3 left-3 right-3 rounded-2xl bg-black/55 px-3 py-2 backdrop-blur-sm">
+            <p className="text-sm font-medium text-white truncate">{title}</p>
+            <p className="text-xs text-white/80">{previewMeta}</p>
+          </div>
         </div>
       );
     }
@@ -327,15 +340,15 @@ export default function FilePreview() {
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)] sm:hidden" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-2 py-2 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center gap-2">
-            <button onClick={handleClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)]" title="Back">
+        <div className="flex items-center justify-between gap-2 px-2 py-2 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button onClick={handleClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] shrink-0" title="Back">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="min-w-0 pr-2">
-              <h2 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] truncate">{title}</h2>
-              <p className="text-xs text-[var(--text-muted)]">
-                {getCategoryLabel(category!)} · {formatFileSize(file_size!)}
+            <div className="min-w-0 pr-1">
+              <h2 className="text-sm sm:text-base font-semibold text-[var(--text-primary)] truncate">{title}</h2>
+              <p className="text-xs text-[var(--text-muted)] truncate">
+                {getCategoryLabel(category!)} · {formatFileSize(file_size!)}{previewMeta ? ` · ${previewMeta}` : ""}
               </p>
             </div>
           </div>

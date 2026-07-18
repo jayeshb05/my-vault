@@ -101,7 +101,7 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
   const canSend = text.trim().length > 0 || attachments.length > 0;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--compose-bg)] border-t border-[var(--border)] safe-bottom">
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)]/70 bg-[var(--compose-bg)]/90 backdrop-blur-2xl safe-bottom shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
       {error && (
         <p className="text-center text-xs text-red-500 py-1 px-3">{error}</p>
       )}
@@ -133,7 +133,7 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
 
       <div className="flex items-end gap-2 px-3 py-2 max-w-3xl mx-auto">
         {/* Input bar with + inside on the left */}
-        <div className="flex-1 flex items-end rounded-3xl bg-[var(--compose-input)] min-h-[42px]">
+        <div className="flex-1 flex items-end rounded-[20px] border border-[var(--border)] bg-[var(--compose-input)]/90 min-h-[42px] shadow-sm">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -170,9 +170,9 @@ export default function BottomComposeBar({ onSend }: BottomComposeBarProps) {
           onClick={handleSend}
           disabled={sending || !canSend}
           className={cn(
-            "p-2.5 rounded-full shrink-0 mb-0.5 transition-all",
+            "p-2.5 rounded-full shrink-0 mb-0.5 transition-all shadow-sm",
             canSend
-              ? "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+              ? "bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] text-white"
               : "text-[var(--text-muted)] opacity-50",
             sending && "opacity-70"
           )}

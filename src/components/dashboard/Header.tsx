@@ -70,14 +70,14 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
   const isDark = theme === "dark";
 
   return (
-    <header className="sticky top-0 z-40 bg-[var(--header-bg)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+    <header className="sticky top-0 z-40 border-b border-[var(--border)]/70 bg-[var(--header-bg)]/80 backdrop-blur-2xl">
       <div className="max-w-3xl mx-auto px-4 py-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)]/70 bg-[var(--bg-card)]/70 p-2 shadow-sm backdrop-blur-xl">
           <button
             onClick={handleLogoClick}
-            className="flex items-center gap-2 shrink-0 select-none"
+            className="flex items-center gap-2 shrink-0 select-none rounded-xl px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)]"
           >
-            <div className="w-9 h-9 rounded-full bg-[var(--accent)] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center shadow-sm">
               <Shield className="w-4 h-4 text-white" />
             </div>
             <span className="font-semibold text-[var(--text-primary)] hidden sm:block">Lily</span>
@@ -100,6 +100,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
                 <button
                   onClick={() => { setSearchOpen(false); handleSearch(""); }}
                   className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] shrink-0"
+                  aria-label="Close search"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -107,7 +108,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
             ) : (
               <button
                 onClick={() => setSearchOpen(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-full bg-[var(--compose-input)] border border-[var(--border)] text-sm text-[var(--text-muted)] hover:border-[var(--accent)]/50 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-full bg-[var(--compose-input)]/90 border border-[var(--border)] text-sm text-[var(--text-muted)] hover:border-[var(--accent)]/50 transition-colors"
               >
                 <Search className="w-4 h-4 shrink-0" />
                 <span className="truncate">Search everything...</span>
@@ -120,6 +121,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
               onClick={() => setShowSettings(true)}
               className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
               title="Settings"
+              aria-label="Open settings"
             >
               <Settings className="w-5 h-5" />
             </button>
@@ -127,6 +129,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
               onClick={toggleTheme}
               className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
               title="Toggle theme"
+              aria-label="Toggle theme"
             >
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -134,6 +137,7 @@ export default function Header({ onLock, onSearch }: HeaderProps) {
               onClick={onLock}
               className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
               title="Lock vault"
+              aria-label="Lock vault"
             >
               <Lock className="w-5 h-5" />
             </button>

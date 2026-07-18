@@ -38,20 +38,22 @@ export default function ContentGrid({ items, isLoading, onDelete, onFavorite, on
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+      <div className="flex items-center justify-center py-24">
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-card)]/80 px-5 py-4 shadow-sm backdrop-blur-xl">
+          <div className="mx-auto h-8 w-8 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-20 px-4">
-        <div className="w-16 h-16 rounded-2xl bg-[var(--bg-hover)] flex items-center justify-center mx-auto mb-4">
-          <FileText className="w-8 h-8 text-[var(--text-muted)]" />
+      <div className="mx-4 rounded-[28px] border border-[var(--border)] bg-[var(--bg-card)]/80 px-6 py-10 text-center shadow-sm backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)]/20 to-[var(--accent-hover)]/10">
+          <FileText className="w-8 h-8 text-[var(--accent)]" />
         </div>
-        <h3 className="text-lg font-medium text-[var(--text-primary)] mb-1">Your vault is empty</h3>
-        <p className="text-sm text-[var(--text-muted)]">Create a note or upload a file to get started</p>
+        <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">Your vault is ready</h3>
+        <p className="mt-1 text-sm text-[var(--text-muted)]">Create a note, upload a file or paste anything to get started.</p>
       </div>
     );
   }
@@ -93,8 +95,8 @@ export default function ContentGrid({ items, isLoading, onDelete, onFavorite, on
                   <div
                     key={item.id}
                     className={cn(
-                      "group relative flex items-center gap-3 p-3 rounded-xl",
-                      "bg-[var(--bg-card)] border border-[var(--border)]",
+                      "group relative flex items-center gap-3 p-3 rounded-2xl",
+                      "bg-[var(--bg-card)]/80 border border-[var(--border)] backdrop-blur-xl",
                       "hover:border-[var(--accent)]/30 hover:shadow-[var(--shadow-card)]",
                       "transition-all duration-200 cursor-pointer"
                     )}
@@ -133,6 +135,7 @@ export default function ContentGrid({ items, isLoading, onDelete, onFavorite, on
                       <button
                         onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === item.id ? null : item.id); }}
                         className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-all"
+                        aria-label="Open item actions"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>

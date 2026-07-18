@@ -57,26 +57,29 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[var(--accent)] opacity-5 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[var(--accent)] opacity-5 rounded-full blur-3xl" />
+        <div className="absolute -top-24 -right-20 w-64 h-64 rounded-full bg-[var(--accent)]/15 blur-3xl" />
+        <div className="absolute -bottom-20 -left-16 w-72 h-72 rounded-full bg-sky-400/10 blur-3xl" />
       </div>
 
       <div className="w-full max-w-md relative">
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-[var(--accent)] mb-4 shadow-lg shadow-[var(--accent)]/30">
+        <div className="text-center mb-6 animate-fade-in">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[24px] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] mb-4 shadow-lg shadow-[var(--accent)]/30">
             <Shield className="w-10 h-10 text-white fill-white" />
           </div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Lily</h1>
-          <p className="text-[var(--text-secondary)]">
-            {setupRequired ? "Create your vault password" : "Enter your password to unlock"}
+          <h1 className="text-3xl font-semibold text-[var(--text-primary)] mb-2">Lily</h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            {setupRequired ? "Create your vault password" : "Fast, private, and beautifully simple"}
           </p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)]/70 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-[var(--text-muted)]">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> Secure • Smooth • Fast
+          </div>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-[var(--bg-card)] rounded-2xl p-8 shadow-[var(--shadow-card)] border border-[var(--border)] animate-slide-up"
+          className="rounded-[28px] border border-[var(--border)] bg-[var(--bg-card)]/80 p-7 shadow-[var(--shadow-card)] backdrop-blur-xl animate-slide-up"
         >
-          <div className="mb-6">
+          <div className="mb-5">
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
               {setupRequired ? "Create Password" : "Password"}
             </label>
@@ -88,9 +91,9 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={setupRequired ? "Choose a strong password" : "Enter your password"}
                 className={cn(
-                  "w-full pl-11 pr-11 py-3 rounded-xl bg-[var(--bg-input)] border border-[var(--border)]",
+                  "w-full pl-11 pr-11 py-3.5 rounded-2xl bg-[var(--bg-input)] border border-[var(--border)]",
                   "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-                  "focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent",
+                  "focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 focus:border-transparent",
                   "transition-all duration-200"
                 )}
                 autoFocus
@@ -109,7 +112,7 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+            <div className="mb-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-sm text-red-500">
               {error}
             </div>
           )}
@@ -118,8 +121,8 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
             type="submit"
             disabled={loading || !password}
             className={cn(
-              "w-full py-3 rounded-xl font-medium text-white transition-all duration-200",
-              "bg-[var(--accent)] hover:bg-[var(--accent-hover)]",
+              "w-full py-3.5 rounded-2xl font-medium text-white transition-all duration-200",
+              "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-hover)]",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "active:scale-[0.98]"
             )}

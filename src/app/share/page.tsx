@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoginScreen from "@/components/LoginScreen";
 import { Shield, CheckCircle, Loader2, FileText, File } from "lucide-react";
+import { clearAuth, persistAuth, readStoredAuth } from "@/lib/auth-session";
 
 interface ShareMeta {
   title: string | null;
@@ -19,10 +20,8 @@ const REDIRECT_DELAY = 800;
 export default function SharePage() {
   const router = useRouter();
 
-  const [authenticated, setAuthenticated] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("vault-auth-session") === "1";
-  });
+  const [authenticated, setAuthenticated] = useState<boolean>(() => readStoredAuth());
+  const [authReady, setAuthReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
@@ -63,8 +62,8 @@ export default function SharePage() {
       const filesSaved = parseInt(params.get("files_saved") || "0");
       setSavedCount(total);
       setShareMeta({ title: null, text: null, url: null, fileCount: filesSaved, fileNames: [] });
-      setAuthenticated(sessionStorage.getItem("vault-auth-session") === "1");
-      if (sessionStorage.getItem("vault-auth-session") === "1") {
+      setAuthenticated(readStoredAuth());
+      if (readStoredAuth()) {
         setDone(true);
         setTimeout(() => router.push("/"), REDIRECT_DELAY);
       }
@@ -90,13 +89,16 @@ export default function SharePage() {
     }
     setShareMeta(meta);
 
-    if (sessionStorage.getItem("vault-auth-session") === "1") {
+    setAuthenticated(readStoredAuth());
+    setAuthReady(true);
+
+    if (readStoredAuth()) {
       setAuthenticated(true);
       processTextShare(meta);
     }
 
     const handleBeforeUnload = () => {
-      sessionStorage.removeItem("vault-auth-session");
+      window.sessionStorage.removeItem("vault-auth-session");
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -104,12 +106,24 @@ export default function SharePage() {
   }, [router]);
 
   const handleAuth = () => {
-    sessionStorage.setItem("vault-auth-session", "1");
+    persistAuth(true);
     setAuthenticated(true);
     const stored = sessionStorage.getItem("share_data");
     const meta = stored ? JSON.parse(stored) : shareMeta;
     processTextShare(meta || { title: null, text: null, url: null, fileCount: 0, fileNames: [] });
   };
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-6">
+        <div className="w-full max-w-sm rounded-[28px] border border-[var(--border)] bg-[var(--bg-card)]/80 p-6 shadow-[var(--shadow-card)] backdrop-blur-xl">
+          <div className="mx-auto h-14 w-14 rounded-2xl bg-[var(--accent)]/20 animate-pulse" />
+          <div className="mt-4 h-4 w-24 rounded-full bg-[var(--bg-hover)] animate-pulse mx-auto" />
+          <div className="mt-3 h-3 w-full rounded-full bg-[var(--bg-hover)] animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   if (!authenticated) {
     return <LoginScreen onSuccess={handleAuth} />;

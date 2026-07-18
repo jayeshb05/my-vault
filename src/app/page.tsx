@@ -5,12 +5,11 @@ import LoginScreen from "@/components/LoginScreen";
 import Dashboard from "@/components/Dashboard";
 import { CheckCircle } from "lucide-react";
 import { useVaultStore } from "@/store/vault-store";
+import { clearAuth, persistAuth, readStoredAuth } from "@/lib/auth-session";
 
 export default function Home() {
-  const [authenticated, setAuthenticated] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("vault-auth-session") === "1";
-  });
+  const [authenticated, setAuthenticated] = useState<boolean>(() => readStoredAuth());
+  const [authReady, setAuthReady] = useState(false);
   const [sharedToast, setSharedToast] = useState(false);
   const { refreshItems } = useVaultStore();
   const lastRefresh = useRef(0);
@@ -37,6 +36,9 @@ export default function Home() {
         setTimeout(() => setSharedToast(false), 3000);
       }
 
+      setAuthenticated(readStoredAuth());
+      setAuthReady(true);
+
       if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
         navigator.serviceWorker.register("/sw.js").catch(() => {});
       }
@@ -45,7 +47,7 @@ export default function Home() {
     init();
 
     const handleBeforeUnload = () => {
-      sessionStorage.removeItem("vault-auth-session");
+      window.sessionStorage.removeItem("vault-auth-session");
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -77,15 +79,28 @@ export default function Home() {
   }, [authenticated]);
 
   const handleLock = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    sessionStorage.removeItem("vault-auth-session");
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    clearAuth();
     setAuthenticated(false);
   };
 
   const handleLoginSuccess = () => {
-    sessionStorage.setItem("vault-auth-session", "1");
+    persistAuth(true);
     setAuthenticated(true);
   };
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4">
+        <div className="w-full max-w-sm rounded-[28px] border border-[var(--border)] bg-[var(--bg-card)]/80 p-6 shadow-[var(--shadow-card)] backdrop-blur-xl">
+          <div className="h-12 w-12 rounded-2xl bg-[var(--accent)]/20 animate-pulse" />
+          <div className="mt-4 h-4 w-24 rounded-full bg-[var(--bg-hover)] animate-pulse" />
+          <div className="mt-3 h-3 w-full rounded-full bg-[var(--bg-hover)] animate-pulse" />
+          <div className="mt-2 h-3 w-4/5 rounded-full bg-[var(--bg-hover)] animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   if (!authenticated) {
     return <LoginScreen onSuccess={handleLoginSuccess} />;

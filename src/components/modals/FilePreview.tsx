@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Download, Star, Trash2, Copy } from "lucide-react";
+import { X, Download, Star, Trash2, Copy, ArrowLeft } from "lucide-react";
 import { useVaultStore } from "@/store/vault-store";
 import { formatFileSize, getCategoryLabel } from "@/lib/utils";
 import { copyVaultItem } from "@/lib/clipboard";
@@ -24,6 +24,14 @@ export default function FilePreview() {
   const [copying, setCopying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [closing, setClosing] = useState(false);
+
+  // Image gesture state
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const lastPan = useRef({ x: 0, y: 0 });
+  const lastDistance = useRef<number | null>(null);
+  const lastCenter = useRef<{ x: number; y: number } | null>(null);
+  const lastTap = useRef(0);
 
   // Swipe-down gesture state
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -67,6 +75,9 @@ export default function FilePreview() {
           sheet.style.transform = "";
           sheet.style.transition = "";
         }
+        // reset image transform
+        setScale(1);
+        setTranslate({ x: 0, y: 0 });
       }, 280);
     } else {
       setShowFilePreview(false);
@@ -107,6 +118,19 @@ export default function FilePreview() {
     currentDelta.current = 0;
     isDragging.current = false;
 
+    if (e.touches.length === 2) {
+      // start pinch
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      lastDistance.current = Math.hypot(dx, dy);
+      lastCenter.current = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+    } else {
+      lastDistance.current = null;
+      lastCenter.current = null;
+    }
+
     const sheet = sheetRef.current;
     if (sheet) {
       sheet.style.transition = "none";
@@ -114,15 +138,49 @@ export default function FilePreview() {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    // If two fingers — pinch-to-zoom
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dx = t1.clientX - t0.clientX;
+      const dy = t1.clientY - t0.clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastDistance.current && lastCenter.current) {
+        const deltaScale = dist / lastDistance.current;
+        const nextScale = Math.max(1, Math.min(5, scale * deltaScale));
+        // compute movement to keep center stable
+        const center = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+        const dxCenter = center.x - lastCenter.current.x;
+        const dyCenter = center.y - lastCenter.current.y;
+        setScale(nextScale);
+        setTranslate((prev) => ({ x: prev.x + dxCenter, y: prev.y + dyCenter }));
+        lastDistance.current = dist;
+        lastCenter.current = center;
+      } else {
+        lastDistance.current = dist;
+        lastCenter.current = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+      }
+      return;
+    }
+
+    // Single finger — if zoomed, pan image; otherwise treat as sheet drag
+    if (e.touches.length === 1 && scale > 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - (lastPan.current.x || t.clientX);
+      const dy = t.clientY - (lastPan.current.y || t.clientY);
+      lastPan.current = { x: t.clientX, y: t.clientY };
+      setTranslate((p) => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
+
     const delta = e.touches[0].clientY - touchStartY.current;
-    if (delta < 0) return; // only allow downward drag
+    if (delta < 0) return; // only allow downward drag when not zooming
 
     currentDelta.current = delta;
     isDragging.current = true;
 
     const sheet = sheetRef.current;
     if (sheet) {
-      // Add resistance beyond 150px so it feels natural
       const resistance = delta > 150 ? 150 + (delta - 150) * 0.4 : delta;
       sheet.style.transform = `translateY(${resistance}px)`;
     }
@@ -130,19 +188,39 @@ export default function FilePreview() {
 
   const handleTouchEnd = () => {
     const sheet = sheetRef.current;
-    if (!isDragging.current) return;
+
+    // Reset lastPan for next gesture
+    lastPan.current = { x: 0, y: 0 };
+
+    // If we were pinching, just clear pinch state
+    if (lastDistance.current) {
+      lastDistance.current = null;
+      lastCenter.current = null;
+      return;
+    }
+
+    if (!isDragging.current) {
+      // detect double tap to zoom
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        // double tap
+        const newScale = scale > 1 ? 1 : 2;
+        setScale(newScale);
+        if (newScale === 1) setTranslate({ x: 0, y: 0 });
+      }
+      lastTap.current = now;
+      return;
+    }
 
     const delta = currentDelta.current;
     const elapsed = Date.now() - touchStartTime.current;
     const velocity = delta / elapsed; // px/ms
 
-    // Close if dragged > 120px OR fast flick (velocity > 0.5 px/ms)
     const shouldClose = delta > 120 || velocity > 0.5;
 
     if (shouldClose) {
       triggerClose();
     } else {
-      // Snap back with spring
       if (sheet) {
         sheet.style.transition = "transform 0.35s cubic-bezier(0.34,1.56,0.64,1)";
         sheet.style.transform = "translateY(0)";
@@ -159,12 +237,22 @@ export default function FilePreview() {
   const renderPreview = () => {
     if (category === "image" || mime_type?.startsWith("image/")) {
       return (
-        <img
-          src={previewUrl}
-          alt={title}
-          className="max-w-full max-h-full object-contain mx-auto rounded-lg"
-          draggable={false}
-        />
+        <div className="w-full h-full flex items-center justify-center">
+          <img
+            src={previewUrl}
+            alt={title}
+            draggable={false}
+            style={{
+              transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
+              transition: lastDistance.current ? "none" : "transform 0.08s",
+              touchAction: "none",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
+          />
+        </div>
       );
     }
     if (category === "pdf" || mime_type === "application/pdf") {
@@ -215,13 +303,17 @@ export default function FilePreview() {
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)] sm:hidden" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] shrink-0">
-          <div className="min-w-0 pr-2">
-            <h2 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] truncate">{title}</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              {getCategoryLabel(category!)} · {formatFileSize(file_size!)}
-              {" · "}<span className="text-[var(--text-muted)] opacity-70">Swipe down to close</span>
-            </p>
+        <div className="flex items-center justify-between px-2 py-2 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={handleClose} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)]" title="Back">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0 pr-2">
+              <h2 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] truncate">{title}</h2>
+              <p className="text-xs text-[var(--text-muted)]">
+                {getCategoryLabel(category!)} · {formatFileSize(file_size!)}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
             <button onClick={handleCopy} className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:bg-[var(--bg-hover)] text-[var(--text-muted)]" title="Copy">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, ChevronRight, Clock, Lock, Monitor, Moon, Shield, Smartphone, Sun, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, Clock, Lock, Monitor, Moon, Shield, Smartphone, Sun, X, Download, Upload, Key } from "lucide-react";
 import { useVaultStore } from "@/store/vault-store";
 import { formatDate } from "@/lib/utils";
 
@@ -189,6 +189,340 @@ function AccessLogModal({ onClose }: { onClose: () => void }) {
               )}
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Change Password sub-modal ───────────────────────────────────────────── */
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (next !== confirm) { setError("New passwords do not match"); return; }
+    if (next.length < 4) { setError("Password must be at least 4 characters"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (res.ok) {
+        setSuccess(true);
+        setTimeout(onClose, 1500);
+      } else {
+        const data = await res.json();
+        setError(data.error ?? "Failed to change password");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md bg-[var(--sheet-bg)] rounded-t-3xl sm:rounded-3xl border border-[var(--border)]/60 shadow-2xl animate-slide-up flex flex-col">
+        <div className="drag-handle sm:hidden" />
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border)]/60 shrink-0">
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] btn-press transition-colors">
+            <ArrowLeft style={{ width: 18, height: 18 }} />
+          </button>
+          <div className="flex items-center gap-2 flex-1">
+            <Key style={{ width: 16, height: 16 }} className="text-[var(--accent)]" />
+            <h2 className="text-base font-bold text-[var(--text-primary)]">Change Password</h2>
+          </div>
+        </div>
+        <div className="p-5">
+          {success ? (
+            <div className="text-center py-6">
+              <div className="text-4xl mb-3">✅</div>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Password changed!</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                placeholder="Current password"
+                autoFocus
+                className="w-full px-4 py-3 rounded-2xl bg-[var(--bg-input)] border-2 border-transparent text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+              />
+              <input
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                placeholder="New password"
+                className="w-full px-4 py-3 rounded-2xl bg-[var(--bg-input)] border-2 border-transparent text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+              />
+              <input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full px-4 py-3 rounded-2xl bg-[var(--bg-input)] border-2 border-transparent text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+              />
+              {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading || !current || !next || !confirm}
+                className="w-full py-3 rounded-2xl gradient-accent text-white text-sm font-semibold disabled:opacity-50 btn-press shadow-[var(--btn-shadow)]"
+              >
+                {loading ? "Updating…" : "Update Password"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main SettingsModal ──────────────────────────────────────────────────── */
+export default function SettingsModal() {
+  const { showSettings, setShowSettings, theme, setTheme } = useVaultStore();
+  const [autoLock, setAutoLock] = useState(15);
+  const [savingLock, setSavingLock] = useState(false);
+  const [showAccessLog, setShowAccessLog] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+
+  useEffect(() => {
+    if (showSettings) {
+      fetch("/api/settings")
+        .then((r) => r.json())
+        .then((data) => {
+          const mins = Number(data.settings?.auto_lock_minutes);
+          if (Number.isFinite(mins) && mins > 0) setAutoLock(mins);
+        })
+        .catch(() => {});
+    }
+  }, [showSettings]);
+
+  const handleTheme = useCallback(async (t: "light" | "dark") => {
+    setTheme(t);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vault-theme", t);
+      if (t === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    }
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: t }),
+    }).catch(() => {});
+  }, [setTheme]);
+
+  const handleAutoLockChange = async (minutes: number) => {
+    setAutoLock(minutes);
+    setSavingLock(true);
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auto_lock_minutes: minutes }),
+      });
+      if (typeof window !== "undefined") {
+        localStorage.setItem("vault-auto-lock-minutes", String(minutes));
+        window.dispatchEvent(new CustomEvent("autolock-changed", { detail: { minutes } }));
+      }
+    } finally {
+      setSavingLock(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const res = await fetch("/api/backup", { method: "GET" });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `lily-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoreLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/backup", { method: "POST", body: formData });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } finally {
+      setRestoreLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  const LOCK_OPTIONS = [1, 2, 5, 15, 30, 60];
+
+  if (!showSettings) return null;
+  if (showAccessLog) return <AccessLogModal onClose={() => setShowAccessLog(false)} />;
+  if (showChangePassword) return <ChangePasswordModal onClose={() => setShowChangePassword(false)} />;
+
+  return (
+    <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
+      <div className="relative w-full sm:max-w-md bg-[var(--sheet-bg)] rounded-t-3xl sm:rounded-3xl border border-[var(--border)]/60 shadow-2xl animate-slide-up max-h-[92dvh] flex flex-col">
+
+        <div className="drag-handle sm:hidden" />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]/60 shrink-0">
+          <h2 className="text-base font-bold text-[var(--text-primary)]">Settings</h2>
+          <button
+            onClick={() => setShowSettings(false)}
+            className="p-2 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] btn-press transition-colors"
+          >
+            <X style={{ width: 18, height: 18 }} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {/* Appearance */}
+          <div className="px-5 pt-5 pb-2">
+            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">Appearance</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleTheme("dark")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all btn-press ${
+                  theme === "dark"
+                    ? "bg-[var(--accent)] text-white shadow-[var(--btn-shadow)]"
+                    : "bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                }`}
+              >
+                <Moon style={{ width: 15, height: 15 }} />
+                Dark
+              </button>
+              <button
+                onClick={() => handleTheme("light")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all btn-press ${
+                  theme === "light"
+                    ? "bg-[var(--accent)] text-white shadow-[var(--btn-shadow)]"
+                    : "bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                }`}
+              >
+                <Sun style={{ width: 15, height: 15 }} />
+                Light
+              </button>
+            </div>
+          </div>
+
+          {/* Auto-lock */}
+          <div className="px-5 pt-4 pb-2">
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Auto-lock</p>
+              {savingLock && <div className="w-3 h-3 border border-[var(--accent)] border-t-transparent rounded-full animate-spin" />}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {LOCK_OPTIONS.map((min) => (
+                <button
+                  key={min}
+                  onClick={() => handleAutoLockChange(min)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all btn-press ${
+                    autoLock === min
+                      ? "bg-[var(--accent)] text-white shadow-[var(--btn-shadow)]"
+                      : "bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                  }`}
+                >
+                  <Clock style={{ width: 11, height: 11 }} />
+                  {min < 60 ? `${min}m` : "1h"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Security */}
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">Security</p>
+            <div className="rounded-2xl bg-[var(--bg-input)] overflow-hidden divide-y divide-[var(--border)]/40">
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <Key style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+                  <span className="text-sm font-medium text-[var(--text-primary)]">Change Password</span>
+                </div>
+                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+              </button>
+              <button
+                onClick={() => setShowAccessLog(true)}
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <Shield style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+                  <span className="text-sm font-medium text-[var(--text-primary)]">Access Log</span>
+                </div>
+                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Backup & Restore */}
+          <div className="px-5 pt-4 pb-6">
+            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">Backup &amp; Restore</p>
+            <div className="rounded-2xl bg-[var(--bg-input)] overflow-hidden divide-y divide-[var(--border)]/40">
+              <button
+                onClick={handleBackup}
+                disabled={backupLoading}
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press text-left disabled:opacity-60"
+              >
+                <div className="flex items-center gap-3">
+                  <Download style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {backupLoading ? "Creating backup…" : "Export Backup"}
+                  </span>
+                </div>
+                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+              </button>
+              <label className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[var(--bg-hover)] transition-colors btn-press cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <Upload style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {restoreLoading ? "Restoring…" : "Restore Backup"}
+                  </span>
+                </div>
+                <ChevronRight style={{ width: 16, height: 16 }} className="text-[var(--text-muted)]" />
+                <input
+                  type="file"
+                  accept=".zip"
+                  className="hidden"
+                  onChange={handleRestore}
+                  disabled={restoreLoading}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2 px-1">
+              Backup exports all notes and file metadata. Files are stored in Supabase Storage and remain accessible.
+            </p>
+          </div>
         </div>
       </div>
     </div>

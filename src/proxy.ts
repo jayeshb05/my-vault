@@ -5,7 +5,7 @@ import { verifySessionToken, isTokenExpired, COOKIE_NAME } from "@/lib/session-e
 const PUBLIC_PATHS = ["/", "/api/auth/login", "/api/auth/setup", "/api/auth/status", "/share", "/api/share"];
 const STATIC_PATHS = ["/_next", "/favicon.ico", "/manifest.json", "/sw.js", "/icons", "/robots.txt"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (STATIC_PATHS.some((p) => pathname.startsWith(p))) {

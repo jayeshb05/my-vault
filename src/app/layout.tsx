@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Lily",
   applicationName: "Lily",
   description: "Lily — private password-protected vault for notes and files",
-  manifest: "/manifest.json",
+  manifest: "/manifest.json?v=lily-1",
   robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,

@@ -1,4 +1,4 @@
-const CACHE_NAME = "my-vault-v2";
+const CACHE_NAME = "lily-v3";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -21,16 +21,17 @@ self.addEventListener("fetch", (event) => {
 
   if (request.method !== "GET") return;
 
-  // Only cache static assets (icons, manifest)
+  // Only handle static assets (icons, manifest)
   if (!url.pathname.startsWith("/icons/") && url.pathname !== "/manifest.json") return;
 
+  // Network-first strategy for manifest and icons so updates propagate immediately
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-      if (cached) return cached;
-      const response = await fetch(request);
-      if (response.ok) cache.put(request, response.clone());
+    fetch(request).then((response) => {
+      if (response.ok) {
+        const resClone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, resClone));
+      }
       return response;
-    })
+    }).catch(() => caches.match(request))
   );
 });

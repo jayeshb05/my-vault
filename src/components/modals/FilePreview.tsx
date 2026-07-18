@@ -32,6 +32,8 @@ export default function FilePreview() {
   const lastDistance = useRef<number | null>(null);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
   const lastTap = useRef(0);
+  const lastTapPos = useRef<{ x: number; y: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Swipe-down gesture state
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -129,6 +131,9 @@ export default function FilePreview() {
     } else {
       lastDistance.current = null;
       lastCenter.current = null;
+      // store last tap position for potential double-tap
+      const t = e.touches[0];
+      lastTapPos.current = { x: t.clientX, y: t.clientY };
     }
 
     const sheet = sheetRef.current;
@@ -200,15 +205,34 @@ export default function FilePreview() {
     }
 
     if (!isDragging.current) {
-      // detect double tap to zoom
+      // detect double tap to zoom (focus on tap position)
       const now = Date.now();
-      if (now - lastTap.current < 300) {
-        // double tap
+      const prev = lastTap.current;
+      const tapPos = lastTapPos.current;
+      if (now - prev < 300 && tapPos) {
+        const img = imgRef.current;
         const newScale = scale > 1 ? 1 : 2;
-        setScale(newScale);
-        if (newScale === 1) setTranslate({ x: 0, y: 0 });
+        if (img) {
+          const rect = img.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const px = tapPos.x - cx;
+          const py = tapPos.y - cy;
+          const tx = translate.x + (scale - newScale) * px;
+          const ty = translate.y + (scale - newScale) * py;
+          setScale(newScale);
+          if (newScale === 1) {
+            setTranslate({ x: 0, y: 0 });
+          } else {
+            setTranslate({ x: tx, y: ty });
+          }
+        } else {
+          setScale(newScale);
+          if (newScale === 1) setTranslate({ x: 0, y: 0 });
+        }
       }
       lastTap.current = now;
+      lastTapPos.current = null;
       return;
     }
 
@@ -239,6 +263,7 @@ export default function FilePreview() {
       return (
         <div className="w-full h-full flex items-center justify-center">
           <img
+            ref={imgRef}
             src={previewUrl}
             alt={title}
             draggable={false}

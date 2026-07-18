@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Lily",
+  applicationName: "Lily",
   description: "Lily — private password-protected vault for notes and files",
   manifest: "/manifest.json",
   robots: { index: false, follow: false },

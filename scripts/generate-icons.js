@@ -117,7 +117,15 @@ function createVaultIcon(size) {
 const iconsDir = path.join(__dirname, "..", "public", "icons");
 if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
 
-fs.writeFileSync(path.join(iconsDir, "icon-192.png"), createVaultIcon(192));
-fs.writeFileSync(path.join(iconsDir, "icon-512.png"), createVaultIcon(512));
+const customImagePath = path.join(iconsDir, "image.png");
 
-console.log("Icons generated in public/icons/");
+if (fs.existsSync(customImagePath)) {
+  console.log("Found custom image.png! Using it as the app icon...");
+  fs.copyFileSync(customImagePath, path.join(iconsDir, "icon-192.png"));
+  fs.copyFileSync(customImagePath, path.join(iconsDir, "icon-512.png"));
+  console.log("Custom icons successfully applied.");
+} else {
+  fs.writeFileSync(path.join(iconsDir, "icon-192.png"), createVaultIcon(192));
+  fs.writeFileSync(path.join(iconsDir, "icon-512.png"), createVaultIcon(512));
+  console.log("Default teal icons generated in public/icons/");
+}
